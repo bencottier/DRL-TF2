@@ -10,7 +10,7 @@ from mlp import MLP
 import tensorflow as tf
 
 
-def example0():
+def minimal_train():
     mnist = tf.keras.datasets.mnist
 
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
@@ -32,7 +32,7 @@ def example0():
     model.evaluate(x_test, y_test)
 
 
-def example1():
+def model_weights():
     model1 = tf.keras.models.Sequential([
             tf.keras.layers.Flatten(input_shape=(28, 28)),
             tf.keras.layers.Dense(128, activation='relu'),
@@ -49,6 +49,38 @@ def example1():
     print(model3.trainable_weights)
 
 
+def model_copying():
+    # model1 = tf.keras.Model()
+    i = tf.keras.Input((2, 3))
+    x = tf.keras.layers.Dense(2)(i)
+    model1 = tf.keras.Model(inputs=i, outputs=x)
+    # model1 = tf.keras.models.Sequential([
+            # tf.keras.layers.Flatten(input_shape=(28, 28)),
+    #         tf.keras.layers.Dense(128, activation='relu'),
+    #         tf.keras.layers.Dropout(0.2),
+    #         tf.keras.layers.Dense(10, activation='softmax')
+    #     ])
+    model2 = tf.keras.models.clone_model(model1)
+    
+    print(model1.trainable_weights)
+    print(model2.trainable_weights)
+
+
+def model_implicit_layers():
+    class MyModel(tf.keras.Model):
+        def __init__(self):
+            super(MyModel, self).__init__()
+            # self.input1 = tf.keras.layers.Input(shape=(2, 3))
+            self.input1 = tf.keras.Input(shape=(2, 3))
+            self.dense1 = tf.keras.layers.Dense(2)
+
+    model = MyModel()
+    print(model.layers)
+    print(model.trainable_weights)
+
+
 if __name__ == '__main__':
-    # example0()
-    example1()
+    # minimal_train()
+    # model_weights()
+    # model_copying()
+    model_implicit_layers()
