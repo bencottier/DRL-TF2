@@ -15,13 +15,13 @@ import numpy as np
 
 class Actor(Model):
 
-    def __init__(self, action_space, arch=MLP, 
-            hidden_sizes=(400, 300), activation='relu', **kwargs):
+    def __init__(self, arch=MLP, hidden_sizes=(400, 300), activation='relu', 
+            action_space=None, input_shape=None, **kwargs):
         super(Actor, self).__init__()
         self.action_space = action_space
         act_dim = self.action_space.shape[0]
         self.act_limit = self.action_space.high[0]
-        self.model = arch(list(hidden_sizes) + [act_dim], activation, output_activation='tanh')
+        self.model = arch(list(hidden_sizes) + [act_dim], activation, 'tanh', input_shape)
 
     def call(self, x):
         return self.act_limit * self.model(x)
@@ -29,9 +29,10 @@ class Actor(Model):
 
 class Critic(Model):
 
-    def __init__(self, arch=MLP, hidden_sizes=(400, 300), activation='relu', **kwargs):
+    def __init__(self, arch=MLP, hidden_sizes=(400, 300), activation='relu', 
+            input_shape=None, **kwargs):
         super(Critic, self).__init__()
-        self.model = arch(list(hidden_sizes) + [1], activation, None)
+        self.model = arch(list(hidden_sizes) + [1], activation, None, input_shape)
 
     def call(self, x, a):
         return tf.squeeze(self.model(tf.concat([x, a], axis=1)), axis=1)

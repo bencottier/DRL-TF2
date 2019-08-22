@@ -31,15 +31,12 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     # Share information about action space with policy architecture
     ac_kwargs['action_space'] = env.action_space
     # Randomly initialise critic and actor networks
-    critic = Critic(**ac_kwargs)
-    actor = Actor(**ac_kwargs)
-
-    x = np.random.normal(size=(64, 17))
-    a = np.random.normal(size=(64, 6))
-    y = critic(x, a)
+    critic = Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
+    actor = Actor(input_shape=(batch_size, obs_dim), **ac_kwargs)
     # Initialise target networks
-    critic_targ = Critic(**ac_kwargs)
-    y = critic_targ(x, a)
-    critic_targ.set_weights(critic.get_weights())
+    critic_target = Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
+    actor_target = Actor(input_shape=(batch_size, obs_dim), **ac_kwargs)
+    critic_target.set_weights(critic.get_weights())
+    actor_target.set_weights(actor.get_weights())
     # Initialise replay buffer
     replay_buffer = ReplayBuffer(size=replay_size)

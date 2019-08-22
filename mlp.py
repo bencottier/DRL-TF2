@@ -14,14 +14,16 @@ import numpy as np
 
 class MLP(Model):
 
-    def __init__(self, hidden_sizes, activation, output_activation=None):
+    def __init__(self, hidden_sizes, activation, output_activation=None, input_shape=None):
         super(MLP, self).__init__()
         self.hidden_sizes = list(hidden_sizes)
         self.activation = activation
         self.output_activation = output_activation
-        self._build()
+        self.make_layers()
+        if input_shape is not None:
+            super(MLP, self).build(input_shape)
 
-    def _build(self):
+    def make_layers(self):
         for i, hidden_size in enumerate(self.hidden_sizes):
             act = self.activation if i < len(self.hidden_sizes) - 1 else self.output_activation
             layer = Dense(hidden_size, activation=act)
