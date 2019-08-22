@@ -14,7 +14,7 @@ import numpy as np
 
 class MLP(Model):
 
-    def __init__(self, input_shape, hidden_sizes, activation, output_activation=None):
+    def __init__(self, hidden_sizes, activation, output_activation=None):
         super(MLP, self).__init__()
         self.hidden_sizes = list(hidden_sizes)
         self.activation = activation
