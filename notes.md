@@ -33,4 +33,16 @@ Working out best way to do target network ops
     - I thought `tf.keras.models.clone_model` would serve, but this function copies the architecture, not the parameter values. So the initalisation is independent - not what we are after.
     - `model_target.set_weights(model.get_weights())` seems to do the trick.
     - Ok great, this is still working with the supposedly more elegant setup
-- 
+
+## 2019.08.24
+
+Writing target model assignment code
+
+Writing `ReplayBuffer` class
+
+- I was thinking of using a Python list, but given a 1M-sized buffer under cheetah would store 42M floats, I think numpy arrays are best. That means specifying each object that goes in the buffer and having a separate array for each object, so we lose generic-ness, but surely gain a lot in efficiency.
+
+Writing main loop
+
+- Copying in from SU DDPG code, and then converting the necessary bits
+- The main part is the gradient updates
