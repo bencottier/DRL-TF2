@@ -10,11 +10,30 @@ import numpy as np
 
 
 class ReplayBuffer:
-    def __init__(obs_dim, act_dim, size=int(1e6)):
-        pass
+    def __init__(self, obs_dim, act_dim, size=int(1e6)):
+        self.idx = 0
+        self.size = 0
+        self.max_size = size
+        self.obs1_buffer = np.zeros((size, obs_dim), dtype=np.float32)
+        self.obs2_buffer = np.zeros((size, obs_dim), dtype=np.float32)
+        self.acts_buffer = np.zeros((size, act_dim), dtype=np.float32)
+        self.rwds_buffer = np.zeros(size, dtype=np.float32)
+        self.done_buffer = np.zeros(size, dtype=np.float32)
 
-    def store(*experience):
-        pass
+    def store(self, obs, act, rwd, next_obs, done):
+        self.obs1_buffer[self.idx] = obs
+        self.acts_buffer[self.idx] = act
+        self.rwds_buffer[self.idx] = rwd
+        self.obs2_buffer[self.idx] = next_obs
+        self.done_buffer[self.idx] = done
+        self.idx = (self.idx + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
 
-    def sample_batch(batch_size):
-        pass
+    def sample_batch(self, batch_size):
+        idxs = np.random.randint(0, self.size, size=batch_size)
+        return dict(
+                obs1=self.obs1_buffer[idxs], 
+                obs2=self.obs2_buffer[idxs], 
+                acts=self.acts_buffer[idxs], 
+                rwds=self.rwds_buffer[idxs], 
+                done=self.done_buffer[idxs])
