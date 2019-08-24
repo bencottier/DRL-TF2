@@ -12,6 +12,10 @@ from actor_critic import Actor, Critic
 from replay_buffer import ReplayBuffer
 import tensorflow as tf
 import numpy as np
+
+
+def update_target(target, current, polyak=0.995):
+    target.set_weights(polyak * target.get_weights() + (1 - polyak) * current.get_weights())
     
 
 def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0, 
@@ -40,3 +44,8 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     actor_target.set_weights(actor.get_weights())
     # Initialise replay buffer
     replay_buffer = ReplayBuffer(size=replay_size)
+
+
+    # update_target(critic_target, critic, polyak)
+    # update_target(actor_target, actor, polyak)
+
