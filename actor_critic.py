@@ -19,7 +19,8 @@ class RLEstimator(Model):
         super(RLEstimator, self).__init__()
 
     def polyak_update(self, other, p):
-        self.set_weights(p * self.get_weights() + (1 - p) * other.get_weights())
+        self.set_weights([p * ws + (1 - p) * wo \
+                for (ws, wo) in zip(self.get_weights(), other.get_weights())])
 
 
 class Actor(RLEstimator):
@@ -39,10 +40,9 @@ class Actor(RLEstimator):
 
 
 class Critic(RLEstimator):
-    def __init__(self, arch=MLP, hidden_sizes=(400, 300), activation='relu', 
-            discount=0.99, input_shape=None, **kwargs):
+    def __init__(self, arch=MLP, hidden_sizes=(400, 300), 
+            activation='relu', input_shape=None, **kwargs):
         super(Critic, self).__init__()
-        self.discount = discount
         self.model = arch(list(hidden_sizes) + [1], activation, None, input_shape)
 
     def call(self, x, a):
@@ -51,5 +51,6 @@ class Critic(RLEstimator):
     def loss(self, q, backup):
         return tf.reduce_mean((q - backup)**2)
 
-    def bellman_backup(self, reward, done, qvalue):
-        return tf.stop_gradient(reward + self.discount * (1 - done) * qvalue)
+    @staticmethod
+    def bellman_backup(discount, reward, done, qvalue):
+        return tf.stop_gradient(reward + discount * (1 - done) * qvalue)

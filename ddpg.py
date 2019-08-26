@@ -41,7 +41,7 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     ac_kwargs['action_space'] = env.action_space
 
     # Randomly initialise critic and actor networks
-    critic = Critic(discount, input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
+    critic = Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
     actor = Actor(input_shape=(batch_size, obs_dim), **ac_kwargs)
 
     # Initialise target networks
@@ -54,11 +54,12 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     replay_buffer = ReplayBuffer(obs_dim, act_dim, size=replay_size)
 
     # Optimizers
+    # TODO move to class method
     critic_optimizer = tf.keras.optimizers.Adam(q_lr)
     actor_optimizer = tf.keras.optimizers.Adam(pi_lr)
 
     # Set up checkpointing
-    checkpoint_dir = './out/training_checkpoints'
+    checkpoint_dir = os.path.join(logger.output_dir, 'training_checkpoints')
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     checkpoint = tf.train.Checkpoint(critic_optimizer=critic_optimizer,
                                     actor_optimizer=actor_optimizer,
@@ -66,7 +67,7 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
                                     actor=actor)
 
     def get_action(o, noise_scale):
-        a = Actor(o.reshape(1, -1))
+        a = actor(o.reshape(1, -1))
         a += noise_scale * np.random.randn(act_dim)
         return np.clip(a, -act_limit, act_limit)
 
@@ -120,10 +121,11 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
                 batch = replay_buffer.sample_batch(batch_size)
 
                 # Q-learning update
+                # TODO move to class method
                 with tf.GradientTape() as critic_tape:
                     q = critic(batch['obs1'], batch['acts'])
                     q_pi_targ = critic_target(batch['obs2'], actor_target(batch['obs2']))
-                    backup = critic_target.bellman_backup(batch['rwds'], batch['done'], q_pi_targ)
+                    backup = critic_target.bellman_backup(discount, batch['rwds'], batch['done'], q_pi_targ)
                     q_loss = critic.loss(q, backup)
                 critic_gradients = critic_tape.gradient(q_loss, critic.trainable_variables)
                 critic_optimizer.apply_gradients(zip(critic_gradients, critic.trainable_variables))

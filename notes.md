@@ -51,4 +51,20 @@ Writing main loop
 
 Reducing EpochLogger to single-thread statistics
 
-- 
+Debugging through implementation
+
+- Fixed up use of `discount` as argument to `Critic` methods -- no longer an attribute, just passed to `backup` method
+- Verified target update is correct for a single weight value for one layer.
+    - TODO make sure that the order of weights in the list from `get_weights()` is invariant
+- Fixed up to the point of running multiple epochs without error
+- Logs are a go
+- Checkpoints are a go
+- Epochs are taking more than 3x longer than old implementation (over 5 minutes)...not good!
+    - I want to blame TF2.0 but it's way too uncertain. Much could be problematic with my code.
+    - Was the old implementation somehow using parallelism, and this is not?
+    - This run even has 1 layers MLPs instead of 2, which would speed it up a little
+    - Let's come at this fresh, and start with the obvious, simple ideas for what could be wrong.
+    - What about moving the gradient tape calls out of the `for` loop, so they are only created once per epoch? No, I think you want to call it each time you compute a loss...
+- On the bright side, after 10 epochs performance looks good.
+- So there needs to be a proper investigation of speed. Once that's through, I would like to set the parameters identical SU exercise 2.2 and compare.
+
