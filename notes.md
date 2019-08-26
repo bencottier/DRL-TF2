@@ -46,3 +46,9 @@ Writing main loop
 
 - Copying in from SU DDPG code, and then converting the necessary bits
 - The main part is the gradient updates
+
+## 2019.08.26
+
+Reducing EpochLogger to single-thread statistics
+
+- 

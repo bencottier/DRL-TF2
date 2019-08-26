@@ -10,18 +10,18 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from mlp import MLP
 from actor_critic import Actor, Critic
 from replay_buffer import ReplayBuffer
+from logger import EpochLogger
 import tensorflow as tf
 import numpy as np
 import time
 import os
-    
+
 
 def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0, 
          steps_per_epoch=5000, epochs=100, replay_size=int(1e6), discount=0.99, 
          polyak=0.995, pi_lr=1e-3, q_lr=1e-3, batch_size=100, start_steps=10000, 
          act_noise=0.1, max_ep_len=1000, logger_kwargs=dict(), save_freq=1):
-    
-    # TODO: EpochLogger class
+    # Set up logging
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
 
