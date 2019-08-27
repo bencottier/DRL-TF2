@@ -35,21 +35,9 @@ class Actor(RLEstimator):
         self.act_limit = self.action_space.high[0]
         self.model = arch(list(hidden_sizes) + [act_dim], activation, 'tanh', input_shape)
 
+    @tf.function
     def call(self, x):
         return self.act_limit * self.model(x)
-
-    def loss(self, q_pi):
-        return -tf.reduce_mean(q_pi)
-
-    @tf.function
-    def train_step(self, batch, critic):
-        with tf.GradientTape() as tape:
-            pi = self(batch['obs1'])
-            q_pi = critic(batch['obs1'], pi)
-            loss = self.loss(q_pi)
-        gradients = tape.gradient(loss, self.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-        return loss
 
 
 class Critic(RLEstimator):
@@ -60,21 +48,3 @@ class Critic(RLEstimator):
 
     def call(self, x, a):
         return tf.squeeze(self.model(tf.concat([x, a], axis=1)), axis=1)
-
-    def loss(self, q, backup):
-        return tf.reduce_mean((q - backup)**2)
-
-    @staticmethod
-    def bellman_backup(discount, reward, done, qvalue):
-        return tf.stop_gradient(reward + discount * (1 - done) * qvalue)
-
-    @tf.function
-    def train_step(self, batch, critic_target, actor_target, discount):
-        with tf.GradientTape() as tape:
-            q = self(batch['obs1'], batch['acts'])
-            q_pi_targ = critic_target(batch['obs2'], actor_target(batch['obs2']))
-            backup = critic_target.bellman_backup(discount, batch['rwds'], batch['done'], q_pi_targ)
-            loss = self.loss(q, backup)
-        gradients = tape.gradient(loss, self.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-        return loss, q

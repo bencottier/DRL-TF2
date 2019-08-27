@@ -63,6 +63,26 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
         a += noise_scale * np.random.randn(act_dim)
         return np.clip(a, -act_limit, act_limit)
 
+    @tf.function
+    def train_step(batch):
+        with tf.GradientTape(persistent=True) as tape:
+            # Critic loss
+            q = critic(batch['obs1'], batch['acts'])
+            q_pi_targ = critic_target(batch['obs2'], actor_target(batch['obs2']))
+            backup = tf.stop_gradient(batch['rwds'] + discount * (1 - batch['done']) * q_pi_targ)
+            q_loss = tf.reduce_mean((q - backup)**2)
+            # Actor loss
+            pi = actor(batch['obs1'])
+            q_pi = critic(batch['obs1'], pi)
+            pi_loss = -tf.reduce_mean(q_pi)
+        # Q learning update
+        critic_gradients = tape.gradient(q_loss, critic.trainable_variables)
+        critic.optimizer.apply_gradients(zip(critic_gradients, critic.trainable_variables))
+        # Policy update
+        actor_gradients = tape.gradient(pi_loss, actor.trainable_variables)
+        actor.optimizer.apply_gradients(zip(actor_gradients, actor.trainable_variables))
+        return q_loss, q, pi_loss
+
     def test_agent(n=10):
         for _ in range(n):
             o, r, d, ep_ret, ep_len = test_env.reset(), 0, False, 0, 0
@@ -112,12 +132,9 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
             for _ in range(ep_len):
                 batch = replay_buffer.sample_batch(batch_size)
 
-                # Q-learning update
-                q_loss, q = critic.train_step(batch, critic_target, actor_target, discount)
+                # Actor-critic update
+                q_loss, q, pi_loss = train_step(batch)
                 logger.store(LossQ=q_loss, QVals=q)
-
-                # Policy update
-                pi_loss = actor.train_step(batch, critic)
                 logger.store(LossPi=pi_loss)
 
                 # Target update
