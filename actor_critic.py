@@ -20,9 +20,10 @@ class RLEstimator(Model):
         if lr is not None:
             self.optimizer = tf.keras.optimizers.Adam(lr)
 
+    @tf.function
     def polyak_update(self, other, p):
-        self.set_weights([p * ws + (1 - p) * wo \
-                for (ws, wo) in zip(self.get_weights(), other.get_weights())])
+        for (ws, wo) in zip(self.trainable_variables, other.trainable_variables):
+            ws.assign(p * ws + (1 - p) * wo)
 
 
 class Actor(RLEstimator):
@@ -40,7 +41,8 @@ class Actor(RLEstimator):
     def loss(self, q_pi):
         return -tf.reduce_mean(q_pi)
 
-    def train(self, batch, critic):
+    @tf.function
+    def train_step(self, batch, critic):
         with tf.GradientTape() as tape:
             pi = self(batch['obs1'])
             q_pi = critic(batch['obs1'], pi)
@@ -66,7 +68,8 @@ class Critic(RLEstimator):
     def bellman_backup(discount, reward, done, qvalue):
         return tf.stop_gradient(reward + discount * (1 - done) * qvalue)
 
-    def train(self, batch, critic_target, actor_target, discount):
+    @tf.function
+    def train_step(self, batch, critic_target, actor_target, discount):
         with tf.GradientTape() as tape:
             q = self(batch['obs1'], batch['acts'])
             q_pi_targ = critic_target(batch['obs2'], actor_target(batch['obs2']))

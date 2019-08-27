@@ -113,11 +113,11 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
                 batch = replay_buffer.sample_batch(batch_size)
 
                 # Q-learning update
-                q_loss, q = critic.train(batch, critic_target, actor_target, discount)
+                q_loss, q = critic.train_step(batch, critic_target, actor_target, discount)
                 logger.store(LossQ=q_loss, QVals=q)
 
                 # Policy update
-                pi_loss = actor.train(batch, critic)
+                pi_loss = actor.train_step(batch, critic)
                 logger.store(LossPi=pi_loss)
 
                 # Target update
@@ -128,8 +128,8 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
             o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
 
         # End of epoch wrap-up
-        if t > 0 and t % steps_per_epoch == 0:
-            epoch = t // steps_per_epoch
+        if t > 0 and (t+1) % steps_per_epoch == 0:
+            epoch = (t+1) // steps_per_epoch
 
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs - 1):

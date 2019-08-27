@@ -68,3 +68,34 @@ Debugging through implementation
 - On the bright side, after 10 epochs performance looks good.
 - So there needs to be a proper investigation of speed. Once that's through, I would like to set the parameters identical SU exercise 2.2 and compare.
 
+## 2019.08.27
+
+Moving more actor-critic related code to class methods
+
+Working out why this implementation is slower
+
+- One clearly worthwhile thing to try is the `@tf.function` decorator above the heavy-duty functions, namely the training steps for actor and critic. This compiles the code into a graph and is designed to speed things up. But a 3x speedup? I am skeptical.
+- Ok, I am killing the current cheetah run at 15 epochs (it was doing great in terms of performance - 3k average test return on epoch 15).
+- Adding `tf.function` to `Actor.train_step` and `Critic.train_step`
+    - ~200 seconds. A ~33% reduction, pretty good! But as expected, still nowhere near the 100 benchmark.
+    - Oh, also, we aren't even controlling the parameters. Currently the neural nets are at least half the size!
+- Controlling parameters to match TF1.0 benchmark
+    - ~220 seconds.
+- Hmm, given that it is warning about array ops and recommending `tf.where`, and I am just reading [here](https://www.tensorflow.org/beta/guide/autograph#batching) about using `tf.where` in place of list comprehension for-loops, I think `polyak_update` is likely another factor slowing it down. I predict this to be less significant than the training steps though...I'll stick my neck out and say a 10% reduction from the current 220 seconds, so about 200 seconds.
+    - I wonder if `tf.where` is the best choice here though, because I don't have a condition on this for loop. To be fair, I'm not even certain that this is the function that causes the warning, but I guess we can find out quickly.
+    - It still gives the warning if I remove code from `polyak_update()`
+    - It prints in `ddpg.py` after `critic.train_step(...)`
+    - This line: `gradients = tape.gradient(loss, self.trainable_variables)`
+    - Ok, well I don't think we can do anything about it.
+    - The warning is even printed out in an official TF2.0 example, so I feel ok
+    - If I remove `polyak_update()` entirely, about 150 seconds. So updating the targets is a big chunk of the run time! But this doesn't counter my prediction yet - I need to use `tf.function`.
+    - Ok, turns out that while `tf.assign` seems to be out of the 2.0 API, `Variable.assign` is alive and well. This seems to work well, and is perhaps even more elegant than the `[get,set]_weights()` method.
+        - Throwing `tf.function` on this, and...165 seconds! That is a 20% error for my prediction. Impressive. Getting there, getting there...
+
+Aside: the [Estimator](https://www.tensorflow.org/versions/r2.0/api_docs/python/tf/estimator/Estimator) API
+
+- TF looks to be pushing this as a standard and core API for TF2.0
+- It is an alternative to Keras
+- I am willing to read up on this and move the implementation further in line with "the TF2.0 way", but it could take more time than I can afford in the coming period.
+
+
