@@ -41,8 +41,8 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     ac_kwargs['action_space'] = env.action_space
 
     # Randomly initialise critic and actor networks
-    critic = Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
-    actor = Actor(input_shape=(batch_size, obs_dim), **ac_kwargs)
+    critic = Critic(input_shape=(batch_size, obs_dim + act_dim), lr=q_lr, **ac_kwargs)
+    actor = Actor(input_shape=(batch_size, obs_dim), lr=pi_lr, **ac_kwargs)
 
     # Initialise target networks
     critic_target = Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
@@ -53,18 +53,10 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     # Initialise replay buffer
     replay_buffer = ReplayBuffer(obs_dim, act_dim, size=replay_size)
 
-    # Optimizers
-    # TODO move to class method
-    critic_optimizer = tf.keras.optimizers.Adam(q_lr)
-    actor_optimizer = tf.keras.optimizers.Adam(pi_lr)
-
     # Set up checkpointing
     checkpoint_dir = os.path.join(logger.output_dir, 'training_checkpoints')
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-    checkpoint = tf.train.Checkpoint(critic_optimizer=critic_optimizer,
-                                    actor_optimizer=actor_optimizer,
-                                    critic=critic,
-                                    actor=actor)
+    checkpoint = tf.train.Checkpoint(critic=critic, actor=actor)
 
     def get_action(o, noise_scale):
         a = actor(o.reshape(1, -1))
@@ -121,23 +113,11 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
                 batch = replay_buffer.sample_batch(batch_size)
 
                 # Q-learning update
-                # TODO move to class method
-                with tf.GradientTape() as critic_tape:
-                    q = critic(batch['obs1'], batch['acts'])
-                    q_pi_targ = critic_target(batch['obs2'], actor_target(batch['obs2']))
-                    backup = critic_target.bellman_backup(discount, batch['rwds'], batch['done'], q_pi_targ)
-                    q_loss = critic.loss(q, backup)
-                critic_gradients = critic_tape.gradient(q_loss, critic.trainable_variables)
-                critic_optimizer.apply_gradients(zip(critic_gradients, critic.trainable_variables))
+                q_loss, q = critic.train(batch, critic_target, actor_target, discount)
                 logger.store(LossQ=q_loss, QVals=q)
 
                 # Policy update
-                with tf.GradientTape() as actor_tape:
-                    pi = actor(batch['obs1'])
-                    q_pi = critic(batch['obs1'], pi)
-                    pi_loss = actor.loss(q_pi)
-                actor_gradients = actor_tape.gradient(pi_loss, actor.trainable_variables)
-                actor_optimizer.apply_gradients(zip(actor_gradients, actor.trainable_variables))
+                pi_loss = actor.train(batch, critic)
                 logger.store(LossPi=pi_loss)
 
                 # Target update
