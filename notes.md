@@ -91,6 +91,10 @@ Working out why this implementation is slower
     - If I remove `polyak_update()` entirely, about 150 seconds. So updating the targets is a big chunk of the run time! But this doesn't counter my prediction yet - I need to use `tf.function`.
     - Ok, turns out that while `tf.assign` seems to be out of the 2.0 API, `Variable.assign` is alive and well. This seems to work well, and is perhaps even more elegant than the `[get,set]_weights()` method.
         - Throwing `tf.function` on this, and...165 seconds! That is a 20% error for my prediction. Impressive. Getting there, getting there...
+- Put `tf.function` on `Actor.call()`: about 130 seconds. This is for the calls during experience collection - I think other calls are covered recursively by `train_step`. The surprises keep on coming!
+- Now, it looks like I'm close to exhausting the easy speedups, but I want to check whether bundling the gradient tapes for actor and critic makes much difference. This will upset the class separation I just did today, but if the speedup is significant that's fine; there are good reasons to list the training process in the algorithm rather than the object (e.g. the training process is more a property of the algorithm that changes depending on DDPG, TD3, SAC etc., whereas actor-critic is a more consistent, basic idea).
+    - Still about 130 seconds (to be exact, a 3 second speed up, but it's from a sample size of 1).
+    - Well, good to know the object-oriented way is competetive here...but, I am actually favouring the in-algorithm option now, for the reason stated in the parent point. I'm anticipating changing the Actor-Critic classes anyway if I want them to be common to other algorithms (or perhaps it will be best to have DDPGCritic, TD3Critic and the like), but right now I _definitely_ anticipate the training steps to be tied to each algorithm.
 
 Aside: the [Estimator](https://www.tensorflow.org/versions/r2.0/api_docs/python/tf/estimator/Estimator) API
 
@@ -98,4 +102,36 @@ Aside: the [Estimator](https://www.tensorflow.org/versions/r2.0/api_docs/python/
 - It is an alternative to Keras
 - I am willing to read up on this and move the implementation further in line with "the TF2.0 way", but it could take more time than I can afford in the coming period.
 
+Profiling using `cProfile`
 
+- Ok, first of all, I am running this in my native terminal and it's about 80 seconds...NOTE WELL, vscode debugger is for debugging, not runtime!
+- The really baffling thing here is why `statistics_scalar` supposedly takes up about 30 seconds of the 80.
+- Removing logger stats calls
+- Yep, now it's 53 seconds. What is going on?
+- Adding back `logger.store` calls, but not `log_tabular`
+    - 55 seconds
+- Ah, the mystery time is all spent converting Python lists to numpy arrays. This seems very solvable by modifying `EpochLogger` to use numpy arrays from the beginning. My guess is SpinningUp used lists because of compatibility with MPI, or just because the speedup from MPI is so great that it doesn't make much difference.
+
+## 2019.08.27
+
+Checking compatibility of logger using numpy arrays
+
+- `statistics_scalar()` converts an object `x` to a numpy array
+- `x` is `vals` in `log_tabular()`
+- `vals` comes from
+
+    ```python
+    v = self.epoch_dict[key]
+    vals = np.concatenate(v) if isinstance(v[0], np.ndarray) and len(v[0].shape)>0 else v
+    ```
+
+    - This means `vals` _would_ be a numpy array if `v` is a list of non-empty numpy arrays
+- Ah, I see a reason why it is this way now. To use numpy arrays from the beginning, we would need to initialise it to some value, e.g. `zeros()`. But then to do the logs you need to know how many values to take statistics over.
+    - This should be solved by a pointer attribute, incremented in `store()` and used to index and divide the statistics.
+    - Actually, just a fixed `stat_size` would fit our purpose. It would be set to `steps_per_epoch`.
+        - Wait no, different quantities have different frequencies of storage. Losses are stored every training step whereas return is every episode.
+- So, it is more complicated than I first imagined - typical. But this array conversion takes up such a big fraction of runtime (35%) that I have a pretty high tolerance for added/changed code.
+- Ok, I've done it, and it seems to work.
+- 60 seconds folks. Amazing! And that's just on the debugger!
+- Native terminal: 38.8 seconds. Astonishing. There could be some variation due to the state of the machine, but by direct comparison this is faster than when I commented out `log_tabular` (which gave 53 seconds). My immediate thought is that the `store` calls are also being significantly sped up now by assigning values in a pre-allocated numpy array instead of Python list appends.
+- At any rate, this is superb speed up from when we started: about 5-fold. Using the native terminal I would expect a 3M-step cheetah run to take less than 7 hours.

@@ -81,7 +81,7 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
         # Policy update
         actor_gradients = tape.gradient(pi_loss, actor.trainable_variables)
         actor.optimizer.apply_gradients(zip(actor_gradients, actor.trainable_variables))
-        return q_loss, q, pi_loss
+        return q, q_loss, pi_loss
 
     def test_agent(n=10):
         for _ in range(n):
@@ -91,7 +91,7 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
                 o, r, d, _ = test_env.step(get_action(o, 0))
                 ep_ret += r
                 ep_len += 1
-            logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
+            logger.store(n, TestEpRet=ep_ret, TestEpLen=ep_len)
 
     start_time = time.time()
     o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
@@ -133,15 +133,15 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
                 batch = replay_buffer.sample_batch(batch_size)
 
                 # Actor-critic update
-                q_loss, q, pi_loss = train_step(batch)
-                logger.store(LossQ=q_loss, QVals=q)
-                logger.store(LossPi=pi_loss)
+                q, q_loss, pi_loss = train_step(batch)
+                logger.store((steps_per_epoch, batch_size), QVals=q.numpy())
+                logger.store(steps_per_epoch, LossQ=q_loss.numpy(), LossPi=pi_loss.numpy())
 
                 # Target update
                 critic_target.polyak_update(critic, polyak)
                 actor_target.polyak_update(actor, polyak)
 
-            logger.store(EpRet=ep_ret, EpLen=ep_len)
+            logger.store(steps_per_epoch // max_ep_len, EpRet=ep_ret, EpLen=ep_len)
             o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
 
         # End of epoch wrap-up

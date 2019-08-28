@@ -164,7 +164,6 @@ class Logger:
             with_min_and_max (bool): If true, return min and max of x in 
                 addition to mean and std.
         """
-        x = np.array(x, dtype=np.float32)
         mean = np.mean(x)
         std = np.std(x)
 
@@ -204,7 +203,7 @@ class EpochLogger(Logger):
         super().__init__(*args, **kwargs)
         self.epoch_dict = dict()
 
-    def store(self, **kwargs):
+    def store(self, shape, **kwargs):
         """
         Save something into the epoch_logger's current state.
 
@@ -213,8 +212,13 @@ class EpochLogger(Logger):
         """
         for k,v in kwargs.items():
             if not(k in self.epoch_dict.keys()):
-                self.epoch_dict[k] = []
-            self.epoch_dict[k].append(v)
+                # self.epoch_dict[k] = []
+                self.epoch_dict[k] = [np.zeros(shape, np.float32), 0]
+            # self.epoch_dict[k].append(v)
+            # Set the value of the array at the current index
+            self.epoch_dict[k][0][self.epoch_dict[k][1]] = v
+            # Increment the index for the next store
+            self.epoch_dict[k][1] += 1
 
     def log_tabular(self, key, val=None, with_min_and_max=False, average_only=False):
         """
@@ -238,7 +242,8 @@ class EpochLogger(Logger):
         if val is not None:
             super().log_tabular(key,val)
         else:
-            v = self.epoch_dict[key]
+            v, idx = self.epoch_dict[key]
+            v = v[:idx]
             vals = np.concatenate(v) if isinstance(v[0], np.ndarray) and len(v[0].shape)>0 else v
             stats = self.statistics_scalar(vals, with_min_and_max=with_min_and_max)
             super().log_tabular(key if average_only else 'Average' + key, stats[0])
@@ -247,7 +252,8 @@ class EpochLogger(Logger):
             if with_min_and_max:
                 super().log_tabular('Max'+key, stats[3])
                 super().log_tabular('Min'+key, stats[2])
-        self.epoch_dict[key] = []
+            self.epoch_dict[key][0].fill(0)
+            self.epoch_dict[key][1] = 0
 
     def get_stats(self, key):
         """
