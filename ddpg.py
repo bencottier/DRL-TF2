@@ -24,6 +24,16 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
     # Set up logging
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
+    if steps_per_epoch % max_ep_len != 0:
+        """
+        Training steps are batched at the end of a trajectory, so if 
+        episode length does not divide steps per epoch, the size of 
+        training step log arrays can be inconsistent. This takes the 
+        upper bound on size, which wastes some memory but is easy.
+        """
+        max_logger_steps = steps_per_epoch + max_ep_len - (steps_per_epoch % max_ep_len)
+    else:
+        max_logger_steps = steps_per_epoch
 
     # Set random seed for relevant modules
     tf.random.set_seed(seed)
@@ -134,14 +144,14 @@ def ddpg(env_fn, ac_arch=MLP, ac_kwargs=dict(), seed=0,
 
                 # Actor-critic update
                 q, q_loss, pi_loss = train_step(batch)
-                logger.store((steps_per_epoch, batch_size), QVals=q.numpy())
-                logger.store(steps_per_epoch, LossQ=q_loss.numpy(), LossPi=pi_loss.numpy())
+                logger.store((max_logger_steps, batch_size), QVals=q.numpy())
+                logger.store(max_logger_steps, LossQ=q_loss.numpy(), LossPi=pi_loss.numpy())
 
                 # Target update
                 critic_target.polyak_update(critic, polyak)
                 actor_target.polyak_update(actor, polyak)
 
-            logger.store(steps_per_epoch // max_ep_len, EpRet=ep_ret, EpLen=ep_len)
+            logger.store(max_logger_steps // max_ep_len, EpRet=ep_ret, EpLen=ep_len)
             o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
 
         # End of epoch wrap-up
