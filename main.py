@@ -24,9 +24,9 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='ddpg')
     args = parser.parse_args()
 
-    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
-
-    ddpg(lambda : gym.make(args.env), ac_arch=args.arch,
-         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
-         discount=args.discount, seed=args.seed, epochs=args.epochs,
-         logger_kwargs=logger_kwargs)
+    for seed in range(0, 100, 10):
+        print('SEED ', seed)
+        logger_kwargs = setup_logger_kwargs('ddpg-benchmark', seed, datestamp=True)
+        ddpg(lambda : gym.make('HalfCheetah-v2'), ac_arch='mlp', seed=seed, 
+            ac_kwargs=dict(hidden_sizes=[400, 300]), epochs=300, batch_size=100,
+            steps_per_epoch=10000, logger_kwargs=logger_kwargs)
