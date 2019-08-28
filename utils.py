@@ -11,7 +11,7 @@ import os.path as osp
 import json
 
 
-FORCE_DATESTAMP = True
+FORCE_DATESTAMP = False
 DEFAULT_DATA_DIR = './out'
 
 
