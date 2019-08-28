@@ -135,3 +135,36 @@ Checking compatibility of logger using numpy arrays
 - 60 seconds folks. Amazing! And that's just on the debugger!
 - Native terminal: 38.8 seconds. Astonishing. There could be some variation due to the state of the machine, but by direct comparison this is faster than when I commented out `log_tabular` (which gave 53 seconds). My immediate thought is that the `store` calls are also being significantly sped up now by assigning values in a pre-allocated numpy array instead of Python list appends.
 - At any rate, this is superb speed up from when we started: about 5-fold. Using the native terminal I would expect a 3M-step cheetah run to take less than 7 hours.
+
+Replicating run from SU exercise 2.2
+
+- 1 hidden layer, 300 units
+- 5000 steps per epoch, 5e4 steps -> 10 epochs
+- 5000 start steps
+- 150 ep len
+- 64 batch size
+- 0.95 polyak
+- Seed 0, 10, 20
+- Go!
+- Ok, there is a bug in the new logging. Because train steps are performed all at once at the end of a trajectory, episode lengths that do not divide `steps_per_epoch` (e.g. 150 in 5000) cause a situation where some of the last trajectory in the previous epoch has not been trained on. That makes the array sizes for storing inconsistent. In this case, the pattern is 4950, 4950, 5100 recurring. How would I determine that pattern in advance?
+    - 5000 / 150 = 33 r 50
+    - 150 / 50 = 3 r 0
+    - So the cycle is (33, 33, 33 + 1) x 150, or (5000-50, 5000-50, 5000+100)
+    - Another example: ep_len = 350
+        - 5000 / 350 = 14 r 100
+        - 350 / 100 = 3 r 50
+        - 350 / 50 = 7 r 0
+        - The cycle is (14, 14, 14, 15, 14, 14, 15) x 350
+        - 4900 = 5000 - (5000 % 350)
+        - 5250 = 5000 + 350 - (5000 % 350)
+        - Oh! Why don't we just set the size high enough so we don't have to compute this? It will waste a few zeros, but only a small bounded amount. It looks like the limit is `steps_per_epoch + max_ep_len - (steps_per_epoch % max_ep_len)`.
+            - This seems to work, no significant slowdown
+- Ok, running for real now: seeds 0, 10, 20
+    - Very similar (as DRL run comparisons go)
+    - Mine coasts around 200-300 in the last 3 epochs, SU grows steadily to 400-600 (this is consistent across seeds)
+    - My Q loss is lower (seed avg. ~10 vs. ~20) and my pi loss is higher (seed avg. ~-200 vs. ~-400) in the final epoch
+    - I am satisfied with the similarity, and I can't read too much into the trends given how little data there is.
+
+Running DDPG HalfCheetah benchmark
+
+- Parameters matched, good to go
