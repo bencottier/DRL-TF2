@@ -168,3 +168,17 @@ Replicating run from SU exercise 2.2
 Running DDPG HalfCheetah benchmark
 
 - Parameters matched, good to go
+
+## 2019.09.06
+
+Plotting and reviewing benchmark results
+
+- We have now run 10 seeds (0 to 90 in 10s)
+- Plot command: `python -m spinup.run plot ./out/ddpg-benchmark-cheetah`
+- Hmm, had trouble getting the plot to show something. Fixed by forcing `xaxis='Epoch'`, not sure why (normally it's `TotalEnvInteracts`). Anyway, the y axis is the same.
+- Average performance is slightly higher than SU which is nice! SU stays below 6k (besides a few bumps near the end) while mine solidly clears it
+- Variance is higher. Std. below is around 3300-3500 when stable, SU is 3700-3900. Std. above gets up to 9000-10000, SU 7000-8000.
+- I should not read into this result as meaning my implementation is better, or different in any way inasmuch as it affects Return. The result is well explained by the usual variance between seeds for this configuration. I would say that 100 seeds for each version would settle whether there is any substantial difference.
+
+
+
