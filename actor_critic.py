@@ -18,7 +18,7 @@ class RLEstimator(Model):
     Base class for gradient-based parametric estimators used in 
     reinforcement learning algorithms.
     """
-    def __init__(self, lr=None):
+    def __init__(self, lr=None, **kwargs):
         """
         Initialize an RLEstimator.
 
