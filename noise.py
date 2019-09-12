@@ -67,5 +67,5 @@ if __name__ == '__main__':
     plt.plot(x, y)
     plt.plot(x, y + 0.1*np.random.randn(n))
     plt.plot(x, y + noise)
-    plt.legend(['$\sin(k\pi x/n)$', 'with normal noise', 'with OU noise'])
+    plt.legend([r'$\sin(k\pi x/n)$', 'with normal noise', 'with OU noise'])
     plt.show()

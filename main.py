@@ -12,10 +12,10 @@ from utils import setup_logger_kwargs
 import gym
 import argparse
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='HalfCheetah-v2')
-    parser.add_argument('--arch', type=str, default='mlp')
     parser.add_argument('--hid', type=int, default=300)
     parser.add_argument('--l', type=int, default=1)
     parser.add_argument('--discount', type=float, default=0.99)
@@ -24,9 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='ddpg')
     args = parser.parse_args()
 
-    seed = args.seed
-    print('SEED', seed)
-    logger_kwargs = setup_logger_kwargs('ddpg-benchmark-cheetah', seed, datestamp=False)
-    ddpg(lambda : gym.make('HalfCheetah-v2'), ac_arch='mlp', seed=seed, 
-        ac_kwargs=dict(hidden_sizes=[400, 300]), epochs=300, batch_size=100,
+    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed, datestamp=False)
+    ddpg(lambda : gym.make(args.env), seed=args.seed, discount=args.discount,
+        ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), epochs=args.epochs, batch_size=100,
         steps_per_epoch=10000, logger_kwargs=logger_kwargs)
