@@ -193,5 +193,9 @@ Working on a demo that is non-MuJoCo so it is free to run
         - If `get_action()` is squeezed on axis 0 then it is fixed but I would rather fix it on the `o2` end
         - Squeezing `o2` fixes it
         - Aside, it is odd that the error only happens for `act_dim == 1` because the switch from `(act_dim,)` to `(1, act_dim)` happens for any `act_dim`. Yet `o2` does not change shape after the switch for `act_dim > 1`.
-- 
 
+Running Pendulum-v0 training
+
+- `python main.py -s 0 --exp_name ddpg-demo-pendulum`
+
+Preparing public repository
