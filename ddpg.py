@@ -63,6 +63,18 @@ def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
     # Set up logging
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
+
+    # Set random seed for relevant modules
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+
+    # Create environment
+    env, test_env = env_fn(), env_fn()
+    obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.shape[0]
+
+    if env._max_episode_steps < max_ep_len:
+        max_ep_len = env._max_episode_steps
     if steps_per_epoch % max_ep_len != 0:
         """
         Training steps are batched at the end of a trajectory, so if 
@@ -73,15 +85,6 @@ def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
         max_logger_steps = steps_per_epoch + max_ep_len - (steps_per_epoch % max_ep_len)
     else:
         max_logger_steps = steps_per_epoch
-
-    # Set random seed for relevant modules
-    tf.random.set_seed(seed)
-    np.random.seed(seed)
-
-    # Create environment
-    env, test_env = env_fn(), env_fn()
-    obs_dim = env.observation_space.shape[0]
-    act_dim = env.action_space.shape[0]
 
     # Action limit for clipping
     # Assumes all dimensions have the same limit
@@ -180,6 +183,7 @@ def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
 
         # Execute a step in the environment
         o2, r, d, _ = env.step(a)
+        o2 = np.squeeze(o2)  # bug fix for Pendulum-v0 environment, where act_dim == 1
         ep_ret += r
         ep_len += 1
         

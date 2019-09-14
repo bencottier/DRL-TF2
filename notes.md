@@ -180,5 +180,18 @@ Plotting and reviewing benchmark results
 - Variance is higher. Std. below is around 3300-3500 when stable, SU is 3700-3900. Std. above gets up to 9000-10000, SU 7000-8000.
 - I should not read into this result as meaning my implementation is better, or different in any way inasmuch as it affects Return. The result is well explained by the usual variance between seeds for this configuration. I would say that 100 seeds for each version would settle whether there is any substantial difference.
 
+## 2019.09.14
 
+Working on a demo that is non-MuJoCo so it is free to run
+
+- LunarLanderContinuous-v2 and MountainCarContinuous-v0 throw errors, not sure why
+- Pendulum-v0
+    - Bug
+        - When act_dim is `1`, as it is here, `env.action_space.sample()` is `(1,)` while `get_action()` or the policy is `(1, 1)`.
+        - As is, the switch to a `(1, 1)` shape after `start_steps` have elapsed causes `o2` to switch to `(obs_dim, 1)`, which does not fit the previously allocated buffer shape. Hence error.
+        - If the `env.action_space.sample()` is reshaped to `(1, -1)` then the error occurs for `o2` straight up (before the switch) because the buffer has each element as 1D
+        - If `get_action()` is squeezed on axis 0 then it is fixed but I would rather fix it on the `o2` end
+        - Squeezing `o2` fixes it
+        - Aside, it is odd that the error only happens for `act_dim == 1` because the switch from `(act_dim,)` to `(1, act_dim)` happens for any `act_dim`. Yet `o2` does not change shape after the switch for `act_dim > 1`.
+- 
 
