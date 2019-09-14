@@ -6,6 +6,16 @@ This repository is for deep reinforcement learning algorithms (currently only De
 
 Essentials are Python >= 3.6, TensorFlow 2.0 and OpenAI Gym. For specifics, see `environment.yml`.
 
+## Demo
+
+If you have a MuJoCo license:
+
+    python test.py ./out/demo/cheetah HalfCheetah-v2
+
+Otherwise:
+    
+    python test.py ./out/demo/pendulum Pendulum-v0
+
 ## Train
 
 Train an RL agent using `train.py`
@@ -47,16 +57,6 @@ Once training is finished, you can evaluate and visualise the learned policy usi
     --episodes EPISODES   Number of episodes to run
     --checkpoint_number CHECKPOINT_NUMBER
                             Checkpoint to load models from (default latest)
-
-## Demo
-
-If you have a MuJoCo license:
-
-    python test.py ./out/demo/cheetah HalfCheetah-v2
-
-Otherwise:
-    
-    python test.py ./out/demo/pendulum Pendulum-v0
 
 ## Performance
 
