@@ -65,10 +65,12 @@ def test_policy(output_dir, env_name, episodes, checkpoint_number):
         while not(d or (ep_len == exp_data['max_ep_len'])):
             env.render()
             o, r, d, _ = env.step(actor(o.reshape(1, -1)))
+            if type(r) == np.ndarray:
+                r = r[0]
             ep_ret += r
             ep_len += 1
         ep_rets[i] = ep_ret
-        print(f'Episode {i}: return={ep_ret[0]:.0f} length={ep_len}')
+        print(f'Episode {i}: return={ep_ret:.0f} length={ep_len}')
     # Summary stats
     print(f'avg={ep_rets.mean():.0f} std={ep_rets.std():.0f} ' \
             f'min={ep_rets.min():.0f} max={ep_rets.max():.0f}')
@@ -77,14 +79,14 @@ def test_policy(output_dir, env_name, episodes, checkpoint_number):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_dir', type=str, default='./out/demo',
-            help='Directory containing config.json and training_checkpoints folder')
-    parser.add_argument('--env_name', type=str, default='Pendulum-v0',
-            help='Environment name, normally matches training')
-    parser.add_argument('--episodes', type=int, default=100,
-            help='Number of episodes to run')
-    parser.add_argument('--checkpoint_number', type=int, default=None,
-            help='Checkpoint to load models from (default latest)')
+    parser.add_argument('dir', type=str,
+            help='directory containing config.json and training_checkpoints folder')
+    parser.add_argument('env', type=str,
+            help='environment name, normally matches training')
+    parser.add_argument('--episodes', type=int, default=10,
+            help='number of episodes to run')
+    parser.add_argument('--checkpoint', type=int, default=None,
+            help='checkpoint to load models from (default latest)')
     args = parser.parse_args()
 
-    test_policy(args.output_dir, args.env_name, args.episodes, args.checkpoint_number)
+    test_policy(args.dir, args.env, args.episodes, args.checkpoint)
