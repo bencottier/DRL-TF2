@@ -2,7 +2,9 @@
 """
 ddpg.py
 
-Main script for the deep deterministic policy gradient algorithm.
+Main script for the deep deterministic policy gradient (DDPG) algorithm.
+
+DDPG was first proposed by [Lillicrap et al.](https://arxiv.org/abs/1509.02971) 
 
 author: Ben Cottier (git: bencottier)
 """
@@ -243,3 +245,10 @@ def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
+
+
+def run(env_fn, logger_kwargs, args):
+    ddpg(env_fn, seed=args.seed, discount=args.discount,
+            ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), 
+            epochs=args.epochs, batch_size=100,
+            steps_per_epoch=10000, logger_kwargs=logger_kwargs)
