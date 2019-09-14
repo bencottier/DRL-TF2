@@ -1,6 +1,7 @@
 .vscode
 __pycache__
 out
+!out/demo
 
 *.pyc
 *.pdf
