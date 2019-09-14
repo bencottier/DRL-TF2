@@ -45,18 +45,18 @@ Once training is finished, you can evaluate and visualise the learned policy usi
 
     >>> python test.py --help
 
-    usage: test.py [-h] [--output_dir OUTPUT_DIR] [--env_name ENV_NAME]
-                [--episodes EPISODES] [--checkpoint_number CHECKPOINT_NUMBER]
+    usage: test.py [-h] [--episodes EPISODES] [--checkpoint CHECKPOINT] dir env
+
+    positional arguments:
+    dir                   directory containing config.json and
+                            training_checkpoints folder
+    env                   environment name, normally matches training
 
     optional arguments:
     -h, --help            show this help message and exit
-    --output_dir OUTPUT_DIR
-                            Directory containing config.json and
-                            training_checkpoints folder
-    --env_name ENV_NAME   Environment name, normally matches training
-    --episodes EPISODES   Number of episodes to run
-    --checkpoint_number CHECKPOINT_NUMBER
-                            Checkpoint to load models from (default latest)
+    --episodes EPISODES   number of episodes to run
+    --checkpoint CHECKPOINT
+                            checkpoint to load models from (default latest)
 
 ## Performance
 
