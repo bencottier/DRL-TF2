@@ -1,4 +1,4 @@
-# Deep reinforcement learning algorithms in TensorFlow 2.0
+# DRL-TF2
 
 This repository is for deep reinforcement learning algorithms (currently only Deep Deterministic Policy Gradient) using the TensorFlow 2.0 API. Implementations are partly adapted from [Spinning Up](https://github.com/openai/spinningup/).
 
