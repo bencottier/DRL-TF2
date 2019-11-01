@@ -19,10 +19,11 @@ import time
 import os
 
 
-def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100, 
-         replay_size=int(1e6), discount=0.99, polyak=0.995, pi_lr=1e-3, q_lr=1e-3, 
-         batch_size=100, start_steps=10000, act_noise=0.1, max_ep_len=1000, 
-         logger_kwargs=dict(), save_freq=1):
+def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100, 
+        replay_size=int(1e6), discount=0.99, polyak=0.995, pi_lr=1e-3, q_lr=1e-3, 
+        batch_size=100, start_steps=10000, act_noise=0.1, target_noise=0.2,
+        noise_clip=0.5, policy_delay=2, max_ep_len=1000, 
+        logger_kwargs=dict(), save_freq=1):
     """
     Implements the deep deterministic policy gradient algorithm.
 
@@ -123,6 +124,11 @@ def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
         a += noise_scale * np.random.randn(act_dim)
         return np.clip(a, -act_limit, act_limit)
 
+    def get_target_action(o, noise_scale):
+        a = actor_target(o.reshape(1, -1))
+        a += np.clip(noise_scale * np.random.randn(act_dim), -noise_clip, noise_clip)
+        return np.clip(a, -act_limit, act_limit)
+
     @tf.function
     def train_step(batch):
         """
@@ -139,7 +145,7 @@ def ddpg(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
         with tf.GradientTape(persistent=True) as tape:
             # Critic loss
             q = critic(batch['obs1'], batch['acts'])
-            q_pi_targ = critic_target(batch['obs2'], actor_target(batch['obs2']))
+            q_pi_targ = critic_target(batch['obs2'], get_target_action(batch['obs2'], target_noise))
             backup = tf.stop_gradient(batch['rwds'] + discount * (1 - batch['done']) * q_pi_targ)
             q_loss = tf.reduce_mean((q - backup)**2)
             # Actor loss
