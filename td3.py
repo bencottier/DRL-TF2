@@ -125,9 +125,9 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
         return np.clip(a, -act_limit, act_limit)
 
     def get_target_action(o, noise_scale):
-        a = actor_target(o.reshape(1, -1))
-        a += np.clip(noise_scale * np.random.randn(act_dim), -noise_clip, noise_clip)
-        return np.clip(a, -act_limit, act_limit)
+        a = actor_target(o)
+        a += tf.clip_by_value(noise_scale * tf.random.normal((act_dim,)), -noise_clip, noise_clip)
+        return tf.clip_by_value(a, -act_limit, act_limit)
 
     @tf.function
     def train_step(batch):
@@ -254,7 +254,7 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
 
 
 def run(env_fn, logger_kwargs, args):
-    ddpg(env_fn, seed=args.seed, discount=args.discount,
+    td3(env_fn, seed=args.seed, discount=args.discount,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), 
             epochs=args.epochs, batch_size=100,
             steps_per_epoch=10000, logger_kwargs=logger_kwargs)
