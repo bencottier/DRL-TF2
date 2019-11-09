@@ -199,3 +199,29 @@ Running Pendulum-v0 training
 - `python main.py -s 0 --exp_name ddpg-demo-pendulum`
 
 Preparing public repository
+
+## 2019.11.01
+
+Warning
+
+- Recently I tried running some environment and got an error with logging. I think it was a bug that I thought I had fixed, but apparently not. Unfortunately I don't remember which environment I was trying to run on, but trying a few will probably uncover it.
+
+Reviewing TD3 algorithm
+
+- I will write in terms of differences to DDPG
+- Target policy smoothing
+    - Add clipped (Gaussian) noise to target policy action, and clip the result to be within action limits.
+    - Noise clipping limits and noise std are hyperparameters
+    - What this does: a form of regularisation. Suppose the Q-function approximator happens to have a sharp park (i.e. a peak over a small subset of the action space). Adding noise to the action means that similar actions (small Euclidean distance in action space) are less distinguished, and thus the peak is less likely to be exploited.
+    - Relating this to our DDPG implementation, we would add noise to `actor_target` before it gets passed to `critic_target` for `q_pi_targ`. Not to be confused with the `act_noise` added to the current (non-target) policy.
+- Clipped double-Q learning ("Twin")
+    - Have two Q-function estimators (both regular and target)
+    - When computing Bellman backup, use the minimum of the two Q targets
+    - Update both regular Q estimators using this clipped backup
+    - Research question: generalising from 2 to N, how does the benefit vary?
+        - Would check TD3 paper to see if they investigated this at all
+- Less frequent policy updates ("Delayed")
+    - Already implemented in our DDPG (1 policy update per trajectory)
+    - Can further reduce policy update frequency by multiple trajectories (SpinningUp default is 2)
+    - Note Q update frequency is kept to 1
+- 
