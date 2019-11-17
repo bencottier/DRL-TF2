@@ -22,7 +22,7 @@ import os
 def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100, 
         replay_size=int(1e6), discount=0.99, polyak=0.995, pi_lr=1e-3, q_lr=1e-3, 
         batch_size=100, start_steps=10000, act_noise=0.1, target_noise=0.2,
-        noise_clip=0.5, policy_delay=2, max_ep_len=1000, 
+        noise_clip=0.5, policy_delay=2, num_q=2, max_ep_len=1000, 
         logger_kwargs=dict(), save_freq=1):
     """
     Implements the deep deterministic policy gradient algorithm.
@@ -97,13 +97,15 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
     ac_kwargs['action_space'] = env.action_space
 
     # Randomly initialise critic and actor networks
-    critic = Critic(input_shape=(batch_size, obs_dim + act_dim), lr=q_lr, **ac_kwargs)
+    critics = [Critic(input_shape=(batch_size, obs_dim + act_dim), lr=q_lr, **ac_kwargs)
+            for _ in range(num_q)]
     actor = Actor(input_shape=(batch_size, obs_dim), lr=pi_lr, **ac_kwargs)
 
     # Initialise target networks with the same weights as main networks
-    critic_target = Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
+    critic_targets = [Critic(input_shape=(batch_size, obs_dim + act_dim), **ac_kwargs)
+            for _ in range(num_q)]
     actor_target = Actor(input_shape=(batch_size, obs_dim), **ac_kwargs)
-    critic_target.set_weights(critic.get_weights())
+    for i in range(num_q): critic_targets[i].set_weights(critics[i].get_weights())
     actor_target.set_weights(actor.get_weights())
 
     # Initialise replay buffer for storing and getting batches of transitions
@@ -112,7 +114,8 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
     # Set up model checkpointing so we can resume training or test separately
     checkpoint_dir = os.path.join(logger.output_dir, 'training_checkpoints')
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-    checkpoint = tf.train.Checkpoint(critic=critic, actor=actor)
+    critic_dict = {f'critic{i}':critics[i] for i in range(num_q)}
+    checkpoint = tf.train.Checkpoint(**critic_dict, actor=actor)
 
     def get_action(o, noise_scale):
         """
@@ -144,21 +147,31 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
         """
         with tf.GradientTape(persistent=True) as tape:
             # Critic loss
-            q = critic(batch['obs1'], batch['acts'])
-            q_pi_targ = critic_target(batch['obs2'], get_target_action(batch['obs2'], target_noise))
+            q_pi_targs = [critic_target(batch['obs2'], get_target_action(batch['obs2'], target_noise))
+                    for critic_target in critic_targets]
+            q_pi_targ = tf.reduce_min(tf.stack(q_pi_targs), axis=0)
             backup = tf.stop_gradient(batch['rwds'] + discount * (1 - batch['done']) * q_pi_targ)
-            q_loss = tf.reduce_mean((q - backup)**2)
+            qs = [critic(batch['obs1'], batch['acts']) for critic in critics]
+            q_losses = [tf.reduce_mean((q - backup)**2) for q in qs]
             # Actor loss
             pi = actor(batch['obs1'])
-            q_pi = critic(batch['obs1'], pi)
+            q_pi = critics[0](batch['obs1'], pi)
             pi_loss = -tf.reduce_mean(q_pi)
         # Q learning update
-        critic_gradients = tape.gradient(q_loss, critic.trainable_variables)
-        critic.optimizer.apply_gradients(zip(critic_gradients, critic.trainable_variables))
+        for i in range(num_q):
+            critic_gradients = tape.gradient(q_losses[i], critics[i].trainable_variables)
+            critics[i].optimizer.apply_gradients(zip(critic_gradients, critics[i].trainable_variables))
         # Policy update
         actor_gradients = tape.gradient(pi_loss, actor.trainable_variables)
         actor.optimizer.apply_gradients(zip(actor_gradients, actor.trainable_variables))
-        return q, q_loss, pi_loss
+        # Mean and std of Q results for logging
+        qs_stack = tf.stack(qs)
+        q_mean = tf.reduce_mean(qs_stack, axis=0)
+        q_std = tf.math.reduce_std(qs_stack, axis=0)
+        q_losses_stack = tf.stack(q_losses)
+        q_loss_mean = tf.reduce_mean(q_losses_stack, axis=0)
+        q_loss_std = tf.math.reduce_std(q_losses_stack, axis=0)
+        return (q_mean, q_std), (q_loss_mean, q_loss_std), pi_loss
 
     def test_agent(n=10):
         """
@@ -217,12 +230,15 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
                 batch = replay_buffer.sample_batch(batch_size)
 
                 # Actor-critic update
-                q, q_loss, pi_loss = train_step(batch)
-                logger.store((max_logger_steps, batch_size), QVals=q.numpy())
-                logger.store(max_logger_steps, LossQ=q_loss.numpy(), LossPi=pi_loss.numpy())
+                q_stats, q_loss_stats, pi_loss = train_step(batch)
+                logger.store((max_logger_steps, batch_size), 
+                        QMeans=q_stats[0].numpy(), QStds=q_stats[1].numpy())
+                logger.store(max_logger_steps, LossQMean=q_loss_stats[0].numpy(), 
+                        LossQStd=q_loss_stats[1].numpy(), LossPi=pi_loss.numpy())
 
                 # Target update
-                critic_target.polyak_update(critic, polyak)
+                for i in range(num_q):
+                    critic_targets[i].polyak_update(critics[i], polyak)
                 actor_target.polyak_update(actor, polyak)
 
             logger.store(max_logger_steps // max_ep_len, EpRet=ep_ret, EpLen=ep_len)
@@ -246,9 +262,11 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
             logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TestEpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t+1)
-            logger.log_tabular('QVals', with_min_and_max=True)
+            logger.log_tabular('QMeans', with_min_and_max=True)
+            logger.log_tabular('QStds', with_min_and_max=True)
             logger.log_tabular('LossPi', average_only=True)
-            logger.log_tabular('LossQ', average_only=True)
+            logger.log_tabular('LossQMean', average_only=True)
+            logger.log_tabular('LossQStd', average_only=True)
             logger.log_tabular('Time', time.time() - start_time)
             logger.dump_tabular()
 
@@ -256,5 +274,5 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
 def run(env_fn, logger_kwargs, args):
     td3(env_fn, seed=args.seed, discount=args.discount,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), 
-            epochs=args.epochs, batch_size=100,
+            epochs=args.epochs, batch_size=100, num_q=2,
             steps_per_epoch=10000, logger_kwargs=logger_kwargs)
