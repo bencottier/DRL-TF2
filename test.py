@@ -44,15 +44,8 @@ def test_policy(output_dir, env_name, episodes, checkpoint_number):
     critic = Critic(input_shape=(exp_data['batch_size'], obs_dim + act_dim), **ac_kwargs)
     actor = Actor(input_shape=(exp_data['batch_size'], obs_dim), **ac_kwargs)
 
-    # Optimizers
-    critic_optimizer = tf.keras.optimizers.Adam(exp_data['q_lr'])
-    actor_optimizer = tf.keras.optimizers.Adam(exp_data['pi_lr'])
-
     checkpoint_dir = os.path.join(output_dir, 'training_checkpoints')
-    checkpoint = tf.train.Checkpoint(critic_optimizer=critic_optimizer,
-                                    actor_optimizer=actor_optimizer,
-                                    critic=critic,
-                                    actor=actor)
+    checkpoint = tf.train.Checkpoint(critic=critic, actor=actor)
     if checkpoint_number is not None:
         checkpoint.restore(os.path.join(checkpoint_dir, f'ckpt-{checkpoint_number}')).expect_partial()
     else:
