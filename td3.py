@@ -122,7 +122,7 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
         """
         a = actor(o.reshape(1, -1))
         a += noise_scale * np.random.randn(act_dim)
-        return np.clip(a, -act_limit, act_limit)
+        return np.squeeze(np.clip(a, -act_limit, act_limit), axis=0)
 
     def get_target_action(o, noise_scale):
         a = actor_target(o)
@@ -179,7 +179,8 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
             o, r, d, ep_ret, ep_len = test_env.reset(), 0, False, 0, 0
             while not(d or (ep_len == max_ep_len)):
                 # Take deterministic actions at test time (noise_scale=0)
-                o, r, d, _ = test_env.step(get_action(o, 0))
+                a = get_action(o, 0)
+                o, r, d, _ = test_env.step(a)
                 ep_ret += r
                 ep_len += 1
             logger.store(n, TestEpRet=ep_ret, TestEpLen=ep_len)
