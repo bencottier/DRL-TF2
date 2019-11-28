@@ -369,4 +369,29 @@ Testing logger fix further
 
 - So this is a problem with action not being zero-dimensional
 - So `get_action` should return a zero-dimensional array IF there is only one element? I fear this will upset other interfaces, but let's look into it.
-- 
+    - When the error occurs, `t` is 9999 and `get_action(o, 0)` has shape (2,) (consistent in three runs)
+    - Values in three runs: [-1., -1.], [-1., -1.], [-0.9999998, 0.79131085]
+    - `act_dim` is 2 and `obs_dim` is 8
+    - Oh, this is occuring in `test_agent`. So `t` is not so relevant.
+    - Odd, I said action shape came out as (2,) the first time, but since have found (1, 2)
+- Actually, the problem may be with the continuous flag. Notice the code that raises. If it's `self.continuous` (which it should be), it assumes the action has more than one element. 
+    - Let's check the `test_env.env.continuous` flag...it's `True`
+        - But, action[0] would evaluate to False - so it would move on to the next condition
+        - But then given self.continuous is True, shouldn't Python evalute the condition before reaching `action==2`?
+        - Let's step into the code
+        - Ok step into doesn't work
+- Aha: because it's shape `(1, 2)`, `action[0]` gives an array of shape (2,). So it is failing on the first part of the condition after all. 
+    - This relates back to the actor network outputting shape `(1, act_dim)` while `env.action_space.sample()` outputs `(act_dim,)` - note that at the time of the error, we are still in the latter regime for training
+    - But I recall having problems with reshaping the actor output to `(act_dim,)` - would need to check multiple environments work with this, if any
+        - See 2019.09.14
+        - "If `get_action()` is squeezed on axis 0 then it is fixed but I would rather fix it on the `o2` end"
+        - Ok, not sure why I rathered that
+    - Is the issue caused related to having an effective batch size of 1 for testing?
+    - Squeezing `get_action()` gets past the error now
+    - `LunarLanderContinuous-v2` 5 epochs OK
+    - Let's try on other envs
+        - `Pendulum-v0` OK
+        - `BipedalWalker-v2` OK
+        - `MountainCarContinuous-v0` OK
+
+
