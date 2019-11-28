@@ -393,5 +393,4 @@ Testing logger fix further
         - `Pendulum-v0` OK
         - `BipedalWalker-v2` OK
         - `MountainCarContinuous-v0` OK
-
-
+- Running `BipedalWalker-v2` for 50 epochs
