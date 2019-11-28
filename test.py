@@ -35,6 +35,7 @@ def test_policy(output_dir, env_name, episodes, checkpoint_number):
     env = gym.make(env_name)
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
+    act_limit = env.action_space.high[0]
 
     # Share information about action space with policy architecture
     ac_kwargs = dict(hidden_sizes=exp_data['ac_kwargs']['hidden_sizes'])
@@ -51,13 +52,24 @@ def test_policy(output_dir, env_name, episodes, checkpoint_number):
     else:
         checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
+    def get_action(o, noise_scale):
+        """
+        Computes an action from the policy (as a function of the 
+        observation `o`) with added noise (scaled by `noise_scale`),
+        clipped within the bounds of the action space.
+        """
+        a = actor(o.reshape(1, -1))
+        a += noise_scale * np.random.randn(act_dim)
+        return np.squeeze(np.clip(a, -act_limit, act_limit), axis=0)
+
     # Run policy for specified number of episodes, recording return
     ep_rets = np.zeros(episodes)
     for i in range(episodes):
         o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
         while not(d or (ep_len == exp_data['max_ep_len'])):
             env.render()
-            o, r, d, _ = env.step(actor(o.reshape(1, -1)))
+            a = get_action(o, 0)
+            o, r, d, _ = env.step(a)
             if type(r) == np.ndarray:
                 r = r[0]
             ep_ret += r
