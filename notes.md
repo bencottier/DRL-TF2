@@ -224,4 +224,149 @@ Reviewing TD3 algorithm
     - Already implemented in our DDPG (1 policy update per trajectory)
     - Can further reduce policy update frequency by multiple trajectories (SpinningUp default is 2)
     - Note Q update frequency is kept to 1
+
+## 2019.11.09
+
+- Which critic is used to update the policy? Presumably the minimum one
+    - Oh, apparently you just use Q1 by convention. Which indicates that it doesn't really matter for the policy's learning.
+- Aside: I feel like there is some natural extension to the idea of TD3. Not simply increasing the number of Q estimators, but the fact that the two Q estimators ultimately differ in terms of their random initialisation (because they get the same weight updates thereafter). What could we do with the initialisation that might amplify the benefit of this method?
+- I'm thinking there may be a way to stack the q values and do some of the operations without a python for loop, but given Q is conventionally 2 and I'm not going to test exceedingly high numbers of Q networks, I think the efficiency gains are not worth the overhead at this point
+- What to log?
+    - Settling on mean and std of the Q estimator values and losses
+
+## 2019.11.17
+
+Where we are at
+
+- So, I wasn't clear that last time I was extending TD3 to take the number of Q estimators as an argument, in case I want to experiment with that.
+    - Not sure if I tested this update - IIRC did a quick test for two Q networks (i.e. standard TD3, but as one case of the n-critic implementation)
+    - 3 critics seems OK (10 epochs on `Pendulum-v0`)
+    - 1 critic ditto
+
+Investigating logging bug
+
+- We discovered this some time ago but neglected it because it didn't affect `Pendulum-v0` or `HalfCheetah-v2`. I think it may have affected `Swimmer` or `LunarLander-Continuous`, but I'll have to check.
+- The bug may not appear until the first, second, even the third epoch, so need patience.
+- `Swimmer-v2`, DDPG
+    - 5 epochs OK
+- `LunarLanderContinuous-v2`, DDPG
+    - `AttributeError: module 'gym.envs.box2d' has no attribute 'LunarLanderContinuous'`
+    - But when `LunarLanderContinuous-v1`: `gym.error.DeprecatedEnv: Env LunarLanderContinuous-v1 not found (valid versions include ['LunarLanderContinuous-v2'])`
+    - Just to be clear, this isn't the bug I'm looking for
+    - https://github.com/openai/gym/issues/1603 - "Seems to be with the prelim version, installing full version with pip install 'gym[all]' solved it."
+    - Bingo: occurs before first epoch end
+
+        ```
+        Traceback (most recent call last):
+        File "train.py", line 39, in <module>
+            algos[args.algo.lower()](lambda : gym.make(args.env), logger_kwargs, args)
+        File "/home/ben/projects/drl-tf2/ddpg.py", line 254, in run
+            steps_per_epoch=10000, logger_kwargs=logger_kwargs)
+        File "/home/ben/projects/drl-tf2/ddpg.py", line 222, in ddpg
+            logger.store(max_logger_steps // max_ep_len, EpRet=ep_ret, EpLen=ep_len)
+        File "/home/ben/projects/drl-tf2/logger.py", line 219, in store
+            self.epoch_dict[k][0][self.epoch_dict[k][1]] = v
+        IndexError: index 10 is out of bounds for axis 0 with size 10
+        ```
+
+- `BipedalWalker-v2`, DDPG
+    - Identical error to `LunarLanderContinuous-v2` (including index 10)
+- `MountainCarContinuous-v0` OK 
+- `Hopper-v2`
+    - Identical error to `LunarLanderContinuous-v2` (including index 10)
+- This is what I said about the bug which I don't think I fully solved:
+
+    > Ok, there is a bug in the new logging. Because train steps are performed all at once at the end of a trajectory, episode lengths that do not divide `steps_per_epoch` (e.g. 150 in 5000) cause a situation where some of the last trajectory in the previous epoch has not been trained on. That makes the array sizes for storing inconsistent. In this case, the pattern is 4950, 4950, 5100 recurring. How would I determine that pattern in advance?
+
+- Information
+    - The number 10 comes from argument `shape` to `EpochLogger.store()`
+        - `shape` is passed as `max_logger_steps // max_ep_len`
+        - `max_logger_steps` is `steps_per_epoch`, 10000
+        - `max_ep_len` is 1000
+    - `self.epoch_dict[k][0]` has shape `(10,)`
+    - `self.epoch_dict[k][1]` is 10
+    - We are trying to index the former with the latter
+    - This entails that `store` is being called more times than the expected shape of 10
+    - Let's see how high the index for `EpRet` goes if we comment this out
+        - 0 to 433 inclusive
+        - So it calls 434 times
+        - This seems a bizarre number
+        - Epoch 2: 232 times
+        - Epoch 3: 101 times
+        - Epoch 4: 42 times
+        - Epoch 5: 9 times
+        - Ok, see, this method gets called for `EpRet` if `d or (ep_len == max_ep_len)`. The `d` is key: if it reaches a terminal state. This depends on the agent's behaviour.
+            - Note that `LunarLander` varies in the timing of termination.
+            - I predict Hopper is too...yes: `done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and (height > .7) and (abs(ang) < .2))`.
+            - Whereas `HalfCheetah-v2` has `done=False`.
+            - This is also consistent with the number of calls decreasing each epoch: the agent is learning to avoid terminating early.
+    
+Solution
+
+- This confounds our fixed-sized array logging. Now I see why SpinningUp was using lists. But I think the time gains are really valuable. What to do?
+- With early termination as a possibility, these episode-wise logs could be anywhere from `max_logger_steps // max_ep_len` to `max_logger_steps` in length.
+- So space efficiency will take a hit, but not much in absolute terms, and I'm much more concerned with time efficiency here. I think it's acceptable to give the arrays maximum size.
+- We can handle non-full arrays using the index `self.epoch_dict[k][1]`
+    - Actually, I think I already do this
+- Note that, unless episode length is exactly in line with max episode length, the experience of the final episode of an epoch is only learned at the start of the next epoch. This is only consequential in the final epoch, where some experience will be wasted. However it's not very consequential anyway; the experience is very likely negligible amidst a long training period.
+    - Nonetheless I think this is addressed by adding `or (t == total_steps-1)` to the learning condition
+
+More problems
+
+- Ok...have a problem now with 'QMeans' (may not be the only one) hitting index 10000. This is the number of steps per epoch, so currently I can't conceive how this is possible even with variable termination. 
+    - Note this is at the 3rd epoch, so may depend on randomness
+    - It's not the new final-epoch condition I added, because `t` is 29609 and `total_steps` is 30000
+    - Sum of episode lengths is 9994, and this is yet to be updated in this iteration. The current episode length is 172, which would exceed 10000.
+        - Ok, I see the problem. But what exactly are the conditions for this case, i.e. why does it not always occur?
+        - Ah, remember we talked about the final episode from the previous epoch possibly carrying over to the next. So what's happened is (previous_epoch_ep_len + sum(current_epoch_ep_lens) >= steps_per_epoch - ep_len).
+        - So we could change this new, third condition to AND, with the opposite of the above - should do internally to `EpochLogger`
+- Ok, successful 3-epoch run, but longer runs and varied `max_ep_len` needed to properly validate
+
+## 2019.11.18
+
+Testing logger fix further
+
+- 50-epoch run OK
+- 50-epoch run with episode length 157 (just to be unusual)
+    - Training episode length tends to be longer - first guess is this is caused by the new condition on the gradient update/logging block.
+    - Don't have time to confirm now but, probably better to remove that condition and instead make the size of the buffers large enough to handle the case where there would otherwise be not enough room
+
+## 2019.11.27
+
+- So, we had a problem where `(previous_epoch_ep_len + sum(current_epoch_ep_lens) >= steps_per_epoch - ep_len)`
+- I attempted to avoid this with the condition `self.epoch_dict[key][0].sum() + length < max_size`
+    - `self.epoch_dict[key][0].sum()` is `(previous_epoch_ep_len + sum(current_epoch_ep_lens)`
+    - `length` is `ep_len`
+    - `max_size` is `max_logger_steps` which is equal to `steps_per_epoch` or `steps_per_epoch + max_ep_len - (steps_per_epoch % max_ep_len)`
+- We then had an issue with variable episode length _above_ the nominal maximum episode length
+- Propose to remove the new condition and instead set the maximum size of the logger array such that the condition never applies
+- Given we didn't accoun for terminal states, I think a solution is to set `max_logger_steps = steps_per_epoch + max_ep_len` regardless of whether `max_ep_len` divides `steps_per_epoch`. 
+- Note MuJoCo license appears to have just expired.
+- Testing `LunarLanderContinuous-v2` with episode length 157
+    - Hmm I'm getting apparently unrelated problems now...
+  
+## 2019.11.28
+
+- We made a tentative fix to the logging length issue, but then encountered an apparently unrelated error when running `LunarLanderContinuous-v2` with episode length 157
+- Let's replicate and copy the error message
+
+    ```
+    Traceback (most recent call last):
+      File "train.py", line 39, in <module>
+        algos[args.algo.lower()](lambda : gym.make(args.env), logger_kwargs, args)
+      File "/home/ben/projects/drl-tf2/td3.py", line 275, in run
+        steps_per_epoch=10000, logger_kwargs=logger_kwargs)
+      File "/home/ben/projects/drl-tf2/td3.py", line 253, in td3
+        test_agent()
+      File "/home/ben/projects/drl-tf2/td3.py", line 182, in test_agent
+        o, r, d, _ = test_env.step(get_action(o, 0))
+      File "/home/ben/miniconda3/envs/drl-tf2/lib/python3.7/site-packages/gym/wrappers/time_limit.py", line 15,         in step
+        observation, reward, done, info = self.env.step(action)
+      File "/home/ben/miniconda3/envs/drl-tf2/lib/python3.7/site-packages/gym/envs/box2d/lunar_lander.py", line         250, in step
+        if (self.continuous and action[0] > 0.0) or (not self.continuous and action==2):
+    ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+    ```
+
+- So this is a problem with action not being zero-dimensional
+- So `get_action` should return a zero-dimensional array IF there is only one element? I fear this will upset other interfaces, but let's look into it.
 - 

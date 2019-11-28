@@ -22,7 +22,7 @@ import os
 def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100, 
         replay_size=int(1e6), discount=0.99, polyak=0.995, pi_lr=1e-3, q_lr=1e-3, 
         batch_size=100, start_steps=10000, act_noise=0.1, target_noise=0.2,
-        noise_clip=0.5, policy_delay=2, num_q=2, max_ep_len=1000, 
+        noise_clip=0.5, policy_delay=2, num_q=2, max_ep_len=157, 
         logger_kwargs=dict(), save_freq=1):
     """
     Implements the deep deterministic policy gradient algorithm.
@@ -78,16 +78,13 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
 
     if env._max_episode_steps < max_ep_len:
         max_ep_len = env._max_episode_steps
-    if steps_per_epoch % max_ep_len != 0:
-        """
-        Training steps are batched at the end of a trajectory, so if 
-        episode length does not divide steps per epoch, the size of 
-        training step log arrays can be inconsistent. This takes the 
-        upper bound on size, which wastes some memory but is easy.
-        """
-        max_logger_steps = steps_per_epoch + max_ep_len - (steps_per_epoch % max_ep_len)
-    else:
-        max_logger_steps = steps_per_epoch
+    """
+    Training steps are batched at the end of a trajectory, so if  
+    episode length does not divide steps per epoch, the size of 
+    training step log arrays can be inconsistent. This takes the 
+    upper bound on size, which wastes some memory but is easy.
+    """
+    max_logger_steps = steps_per_epoch + max_ep_len
 
     # Action limit for clipping
     # Assumes all dimensions have the same limit
@@ -241,7 +238,7 @@ def td3(env_fn, ac_kwargs=dict(), seed=0, steps_per_epoch=5000, epochs=100,
                     critic_targets[i].polyak_update(critics[i], polyak)
                 actor_target.polyak_update(actor, polyak)
 
-            logger.store(max_logger_steps // max_ep_len, EpRet=ep_ret, EpLen=ep_len)
+            logger.store(max_logger_steps, EpRet=ep_ret, EpLen=ep_len)
             o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
 
         # Post-training for this epoch: save, test and write logs
