@@ -211,7 +211,7 @@ class EpochLogger(Logger):
         values.
         """
         for k,v in kwargs.items():
-            if not(k in self.epoch_dict.keys()):
+            if self.epoch_dict.get(k) is None:
                 # self.epoch_dict[k] = []
                 self.epoch_dict[k] = [np.zeros(shape, np.float32), 0]
             # self.epoch_dict[k].append(v)
