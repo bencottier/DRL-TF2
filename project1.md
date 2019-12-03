@@ -4,8 +4,8 @@
 
 How does the performance compare to baseline for a deep RL algorithm with
 
-1. policy network containing pretrained state autoencoder layers
-2. q network containing pretrained transition dynamics estimator layers
+1. q network inputting pretrained decoded state
+2. q network inputting next state (via pretrained transition model) in addition to state and action
 3. both 1 and 2
 
 ## Components
@@ -69,3 +69,23 @@ How does the performance compare to baseline for a deep RL algorithm with
     - Review performance and make adjustments
     - Design full experiment
     - Compile and analyse results of full experiment
+
+## Log
+
+### 2019.12.03
+
+State autoencoder architecture
+
+- We may have to work with pixels now
+    - I mean we don't have to, but I'm more confident a pretrained autoencoder will help significantly if the raw state is very high-dimensional
+    - So for reference, try this to get pixel state from `gym`: `im_frame = env.render(mode='rgb_array')`
+- I'm looking at Deep TAMER (Warnell et al. 2018) for inspiration since that's the first paper where I came across this technique
+
+Thinking about experimental design
+
+- I felt that comparison of policy aided by state autoencoder and q aided by transition model was not close enough
+- Besides, Deep TAMER uses an autoencoder to help the reward model, not the policy.
+- So I think the two variants (at least as the top priority) should be state encoder for q vs. transition model for q. So if the model is M, we have Q(M(s), a) vs. Q(M(s, a))
+    - But being preemptive here, I already suspect Q(M(s, a)) performs worse. We might still want the original information of (s, a). So how about Q(s, a, M(s, a)), perhaps with M(s, a) getting plugged in later in the forward pass?
+    - Then, the combined approach is Q(M1(s), a, M2(s, a))
+- 
