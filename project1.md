@@ -80,6 +80,10 @@ State autoencoder architecture
     - I mean we don't have to, but I'm more confident a pretrained autoencoder will help significantly if the raw state is very high-dimensional
     - So for reference, try this to get pixel state from `gym`: `im_frame = env.render(mode='rgb_array')`
 - I'm looking at Deep TAMER (Warnell et al. 2018) for inspiration since that's the first paper where I came across this technique
+    - Input/Output: two 160x160 frames
+    - Latent: 100x1
+    - Layers: 3x(64x3x3 Conv, BatchNorm, 2x2 MaxPool), 1x(1x3x3 Conv, BatchNorm, 2x2 MaxPool)
+    - Let's start by copying this
 
 Thinking about experimental design
 
@@ -88,4 +92,22 @@ Thinking about experimental design
 - So I think the two variants (at least as the top priority) should be state encoder for q vs. transition model for q. So if the model is M, we have Q(M(s), a) vs. Q(M(s, a))
     - But being preemptive here, I already suspect Q(M(s, a)) performs worse. We might still want the original information of (s, a). So how about Q(s, a, M(s, a)), perhaps with M(s, a) getting plugged in later in the forward pass?
     - Then, the combined approach is Q(M1(s), a, M2(s, a))
+
+### 2019.12.04
+
+Writing autoencoder class
+
+- Bin for applying dropout to initial identically sized layers:
+
+    ```python
+    up_stack = list()
+    prev_filters = None
+    i = -2
+    while i >= -len(self.hidden_sizes) and self.hidden_sizes[i] != prev_filters:
+        up_stack.append(self.upsample(self.hidden_sizes[i], self.kernel_size, apply_dropout=True))
+        prev_filters = self.hidden_sizes[i]
+        i -= 1
+    up_stack += [self.upsample(f, self.kernel_size) for f in self.hidden_sizes[i::-1]]
+    ```
+
 - 
