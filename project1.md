@@ -110,4 +110,35 @@ Writing autoencoder class
     up_stack += [self.upsample(f, self.kernel_size) for f in self.hidden_sizes[i::-1]]
     ```
 
+- Got it built and returning an output
+- Have not tested the encoder output, flattened and isolated
+- Next we will write a training loop to test its functionality in its own right
+
+### 2019.12.05
+
+Testing encoder
+
+- Seems to have a reasonable output: (1, 100), float32, values are small with mean about 0
+
+Autoencoder training
+
+- Hmm...which is better? Randomly sampling states, or random sampling actions and collecting states from the resulting trajectories?
+    - The latter seems like it would be closer to actual behaviour, and in turn more relevant to the final model
+- Don't think this laptop can handle 1M buffer size of 64x64x3 images of 4-byte numbers
+    - I have 7.5 GiB of RAM
+    - Let's say budget is 4 GiB
+    - 4*1024^3 / (64x64x3x4) = 87K
+    - So 100K seems safe
+    - Not sure how much we would sacrifice by converting to grayscale. By eye, it is harder to distinguish the moving object.
+    - Actually, we can probably adopt a different strategy. Since we are doing supervised learning on a bunch of states, it seems appropriate to separate data collection and training.
+- It's multiple frames of 3 channels...what's the deal with shape and batch size?
+    - DDPG paper
+
+        > the observation reported to the agent contains 9 feature maps (the RGB of each of the 3 renderings) which allows the agent to infer velocities using the differences between frames. The frames were downsampled to 64x64 pixels and the 8-bit RGB values were converted to floating point scaled to [0, 1]. 
+
+- Deep TAMER paper
+
+    > We acquire the training states for each environment in offline simulation using a random policy
+
+- For this supervised learning task I think 100K-sized dataset is plenty to get a good result. CIFAR and MNIST are 60K for example. The MuJoCo, even Atari state data distribution is not that wide - much narrower than CIFAR. The main difficulty appears to be getting the random policy to generate states likely to be encountered throughout (some portion of) the training proper.
 - 
