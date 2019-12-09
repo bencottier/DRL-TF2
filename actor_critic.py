@@ -9,11 +9,10 @@ author: Ben Cottier (git: bencottier)
 from __future__ import absolute_import, division, print_function, unicode_literals
 from mlp import MLP
 import tensorflow as tf
-from tensorflow.keras import Model
 import numpy as np
 
 
-class RLEstimator(Model):
+class RLEstimator(tf.keras.Model):
     """
     Base class for gradient-based parametric estimators used in 
     reinforcement learning algorithms.
