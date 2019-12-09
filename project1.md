@@ -141,4 +141,44 @@ Autoencoder training
     > We acquire the training states for each environment in offline simulation using a random policy
 
 - For this supervised learning task I think 100K-sized dataset is plenty to get a good result. CIFAR and MNIST are 60K for example. The MuJoCo, even Atari state data distribution is not that wide - much narrower than CIFAR. The main difficulty appears to be getting the random policy to generate states likely to be encountered throughout (some portion of) the training proper.
+
+### 2019.12.06
+
+Creating state dataset
+
+- https://www.tensorflow.org/tutorials/load_data/images
+    - `.tgz` file
+    - 5 subdirectories (one per class in the example)
+- I think we will be fine with a single directory of JPEGs
+
+### 2019.12.07
+
+Running state dataset generation: `State dataset of 1e+05 samples for Hopper-v2 saved to ./data/state/Hopper-v2`
+
+- Expect to take about 5 hours
+- Images are 128x128; I thought 64x64 looked too corrupted (thought it would probably be fine given success of DDPG paper experiments), and it doesn't take much longer to generate
+
+Writing batch loop for state autoencoder
+
+- First we need to initialise the dataset that will exist shortly
+    - There will be a directory of `.jpg` files
+    - This will be compressed into a single `.tgz`
+    - Base it on this
+
+        ```python
+        import pathlib
+        data_dir = tf.keras.utils.get_file(origin='https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz',
+                                         fname='flower_photos', untar=True)
+        data_dir = pathlib.Path(data_dir)
+        ```
+
+    - Actually no, the above just ends up with a directory of `.jpg` files anyway
+- Based dataset load on https://www.tensorflow.org/tutorials/load_data/images
+- Model can train without error now, but memory is overloading to the point of frozen desktop. It might be the caching getting out of hand.
+
+### 2019.12.09
+
+Investigating training memory problem
+
+- Simplest thing is to disable caching and see what happens
 - 
