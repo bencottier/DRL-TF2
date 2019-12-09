@@ -32,17 +32,27 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
         with open(os.path.join(save_path, "config.json"), 'w') as out:
             out.write(output)
     else:
+        save_path = os.path.join(save_path, env_name)
         print(f'Resuming from sample {resume_from}')
 
     print(f'State dataset of {num_samples:.0e} samples for {env_name} '
         f'saved to {save_path}')
 
+    batch = 0
     env = gym.make(env_name)
-    sample = resume_from
-    with tqdm.tqdm(total=num_samples) as pbar:  # create a progress bar
+    sample = max(0, resume_from)
+    save_path_base = save_path
+    with tqdm.tqdm(total=num_samples, initial=sample) as pbar:  # create a progress bar
         while sample < num_samples:
             _, d, ep_len = env.reset(), False, 0
             while not (d or (ep_len == max_ep_len)):
+                # Batch data so folders don't get too large
+                this_batch = int(sample / 10000)
+                if batch < this_batch:
+                    batch = this_batch
+                    save_path = os.path.join(save_path_base, f'data_batch_{batch}')
+                    os.makedirs(save_path, exist_ok=True)
+
                 # Save the frame as a downsampled RGB JPEG
                 PIL.Image.fromarray(env.render(mode='rgb_array')).\
                     resize(im_size, resample=PIL.Image.BILINEAR).\
