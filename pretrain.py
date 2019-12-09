@@ -166,6 +166,29 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
             zip(gradients, autoencoder.trainable_variables))
         return loss
 
+    @tf.function
+    def test_step(input_batch, label_batch):
+        pred_batch = autoencoder(input_batch, training=False)
+        loss = tf.keras.losses.mean_squared_error(label_batch, pred_batch)
+        return loss
+
+    for epoch in range(epochs):
+        with tqdm.tqdm(total=train_batches) as pbar_train:
+            for input_batch, label_batch in train_ds:
+                loss = train_step(input_batch, label_batch)
+                loss = loss.numpy().mean()
+                pbar_train.update(1)
+                pbar_train.set_description(f'Epoch {epoch}: train-loss={loss:.4f}')
+        with tqdm.tqdm(total=test_batches) as pbar_test:
+            for input_batch, label_batch in test_ds:
+                loss = test_step(input_batch, label_batch)
+                loss = loss.numpy().mean()
+                pbar_test.update(1)
+                pbar_test.set_description(f'Epoch {epoch}: test-loss={loss:.4f}')
+        # Save the model
+        if (epoch+1) % save_freq == 0:
+            checkpoint.save(file_prefix=checkpoint_prefix)
+
 
 def test_pipeline():
     autoencoder = ConvolutionalAutoencoder([64, 64, 64, 1], 3)
