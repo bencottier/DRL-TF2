@@ -2,7 +2,8 @@
 """
 utils.py
 
-Utility functions. Adapted from Spinning Up.
+Utility functions.
+Some functions adapted from Spinning Up.
 
 author: Ben Cottier (git: bencottier)
 """
