@@ -69,15 +69,10 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
 
 
 def train_state_encoding(env_name, model_kwargs=dict(), seed=0, 
-    steps_per_epoch=5000, epochs=100, lr=1e-3, batch_size=100, 
-    logger_kwargs=dict(), save_freq=1):
+    epochs=100, lr=1e-3, batch_size=4, logger_kwargs=dict(), save_freq=1):
     """
 
     """
-    # Set up logging
-    logger = EpochLogger(**logger_kwargs)
-    logger.save_config(locals())
-
     # Set random seed for relevant modules
     tf.random.set_seed(seed)
     np.random.seed(seed)
