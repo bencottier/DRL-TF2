@@ -10,7 +10,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from replay_buffer import ReplayBuffer
 from logger import EpochLogger
 from autoencoder import ConvolutionalAutoencoder
-from utils import convert_json, scale_float, scale_uint8
+from utils import convert_json, scale_float, scale_uint8, setup_logger_kwargs
 import tensorflow as tf
 import numpy as np
 import gym
@@ -18,7 +18,12 @@ import tqdm
 import json
 import PIL
 import time
+import pathlib
 import os
+import argparse
+
+
+AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
 def generate_state_dataset(env_name, save_path, resume_from=0, 
@@ -37,7 +42,7 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
 
     print(f'State dataset of {num_samples:.0e} samples for {env_name} '
         f'saved to {save_path}')
-
+    
     batch = 0
     env = gym.make(env_name)
     sample = max(0, resume_from)
@@ -191,7 +196,7 @@ def test_pipeline():
     env_name = 'Hopper-v2'
     # env_name = 'Bowling-v0'
     env = gym.make(env_name)
-    o = env.reset()
+    env.reset()
     im_frame = env.render(mode='rgb_array')
 
     print(im_frame.shape)
@@ -219,4 +224,30 @@ def test_pipeline():
 if __name__ == '__main__':
     # test_pipeline()
 
-    generate_state_dataset('Hopper-v2', './data/state')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('env', type=str,
+            help='environment name (from OpenAI Gym)')
+    parser.add_argument('--dataset', type=bool, default=False,
+            help='generate a dataset of states for the environment'
+                'instead of training')
+    parser.add_argument('--resume', type=int, default=0,
+            help='data sample index to resume generation from')
+    parser.add_argument('--hid', type=int, default=64,
+            help='number of hidden units per hidden layer')
+    parser.add_argument('--l', type=int, default=3,
+            help='number of hidden layers')
+    parser.add_argument('--seed', '-s', type=int, default=0,
+            help='random seed')
+    parser.add_argument('--epochs', type=int, default=50,
+            help='number of epochs to train')
+    parser.add_argument('--exp_name', type=str, default='unnamed',
+            help='name for this experiment, used for the logging folder')
+    args = parser.parse_args()
+
+    if args.dataset:
+        generate_state_dataset(args.env, './data/state', resume_from=args.resume)
+    else:
+        logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
+        train_state_encoding(args.env, seed=args.seed, epochs=args.epochs,
+            model_kwargs=dict(hidden_sizes=args.l*[args.hid]+[1]),
+            logger_kwargs=logger_kwargs)
