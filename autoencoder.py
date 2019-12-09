@@ -13,11 +13,14 @@ import numpy as np
 
 class ConvolutionalAutoencoder(tf.keras.Model):
 
-    def __init__(self, hidden_sizes, kernel_size, output_channels=3):
+    def __init__(self, hidden_sizes=(64, 64, 64, 1), kernel_size=3, 
+        output_channels=3, lr=None):
         super(ConvolutionalAutoencoder, self).__init__()
         self.hidden_sizes = list(hidden_sizes)
         self.kernel_size = kernel_size
         self.output_channels = output_channels
+        if lr is not None:
+            self.optimizer = tf.keras.optimizers.Adam(lr)
         self.make_layers()
 
     @staticmethod
