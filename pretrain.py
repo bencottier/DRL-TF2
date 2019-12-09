@@ -23,6 +23,7 @@ import os
 import argparse
 
 
+DATASET_SIZE = 100000
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
@@ -118,7 +119,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
         return img, label
 
     @tf.function
-    def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000):
+    def prepare_for_training(ds, cache=False, shuffle_buffer_size=1000):
         # Cache preprocessing work for dataset
         if cache:
             if isinstance(cache, str):
@@ -126,8 +127,6 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
             else:
                 ds = ds.cache()
         ds = ds.shuffle(buffer_size=shuffle_buffer_size)
-        # Repeat forever
-        ds = ds.repeat()
         ds = ds.batch(batch_size)
         # `prefetch` lets the dataset fetch batches in the background 
         # while the model is training
@@ -138,16 +137,15 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     labeled_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
     ds = labeled_ds.shuffle(buffer_size=1000)
     # Split dataset into train and test
-    ds_size = 50000 # TODO
-    train_size = int(0.8*ds_size)
-    test_size = ds_size - train_size
+    train_size = int(0.8*DATASET_SIZE)
+    test_size = DATASET_SIZE - train_size
     train_ds = ds.take(train_size)
     test_ds = ds.skip(train_size).take(test_size)
     train_batches = int((train_size-1)/batch_size+1)
     test_batches = int((test_size-1)/batch_size+1)
     # Prepare datasets for iteration
-    train_ds = prepare_for_training(train_ds, cache='./states_train.tfcache')
-    test_ds = prepare_for_training(test_ds, cache='./states_test.tfcache')
+    train_ds = prepare_for_training(train_ds)
+    test_ds = prepare_for_training(test_ds)
 
     # Set up model checkpointing so we can resume training or test separately
     checkpoint_dir = os.path.join(logger_kwargs['output_dir'],
@@ -168,7 +166,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
 
     @tf.function
     def test_step(input_batch, label_batch):
-        pred_batch = autoencoder(input_batch, training=False)
+        pred_batch = autoencoder(input_batch, training=True)
         loss = tf.keras.losses.mean_squared_error(label_batch, pred_batch)
         return loss
 
@@ -176,13 +174,13 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
         with tqdm.tqdm(total=train_batches) as pbar_train:
             for input_batch, label_batch in train_ds:
                 loss = train_step(input_batch, label_batch)
-                loss = loss.numpy().mean()
+                loss = np.sqrt(loss.numpy()).mean()
                 pbar_train.update(1)
                 pbar_train.set_description(f'Epoch {epoch}: train-loss={loss:.4f}')
         with tqdm.tqdm(total=test_batches) as pbar_test:
             for input_batch, label_batch in test_ds:
                 loss = test_step(input_batch, label_batch)
-                loss = loss.numpy().mean()
+                loss = np.sqrt(loss.numpy()).mean()
                 pbar_test.update(1)
                 pbar_test.set_description(f'Epoch {epoch}: test-loss={loss:.4f}')
         # Save the model
