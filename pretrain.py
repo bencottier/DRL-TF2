@@ -82,29 +82,85 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     tf.random.set_seed(seed)
     np.random.seed(seed)
 
-    # Create environment
-    env_fn = lambda: gym.make(env_name)
-    env, test_env = env_fn(), env_fn()
-    obs_dim = env.observation_space.shape[0]
-    act_dim = env.action_space.shape[0]
-
     # Initialise model used for encoding
-    autoencoder = ConvolutionalAutoencoder(**model_kwargs)
+    autoencoder = ConvolutionalAutoencoder(lr=lr, **model_kwargs)
 
     # Initialise dataset
-    # TODO
+    # tf.data helpers adapted from https://www.tensorflow.org/tutorials/load_data/images
+    
+    data_dir = os.path.join('./data/state', env_name)
+    with open(os.path.join(data_dir, 'config.json')) as f:
+        data_info = json.load(f)
+    data_dir = pathlib.Path(data_dir)
+    list_ds = tf.data.Dataset.list_files(str(data_dir/'*/*'))
+
+    @tf.function
+    def decode_img(img):
+        # convert the compressed string to a 3D uint8 tensor
+        img = tf.image.decode_jpeg(img, channels=3)
+        # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+        img = tf.image.convert_image_dtype(img, tf.float32)
+        # resize the image to the desired size.
+        return tf.image.resize(img, data_info['im_size'])
+
+    @tf.function
+    def get_label(file_path):
+        img = tf.io.read_file(file_path)
+        img = decode_img(img)
+        return img
+
+    @tf.function
+    def process_path(file_path):
+        label = get_label(file_path)
+        # load the raw data from the file as a string
+        img = tf.io.read_file(file_path)
+        img = decode_img(img)
+        return img, label
+
+    @tf.function
+    def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000):
+        # Cache preprocessing work for dataset
+        if cache:
+            if isinstance(cache, str):
+                ds = ds.cache(cache)
+            else:
+                ds = ds.cache()
+        ds = ds.shuffle(buffer_size=shuffle_buffer_size)
+        # Repeat forever
+        ds = ds.repeat()
+        ds = ds.batch(batch_size)
+        # `prefetch` lets the dataset fetch batches in the background 
+        # while the model is training
+        ds = ds.prefetch(buffer_size=AUTOTUNE)
+        return ds
+
+    # Have multiple images loaded/processed in parallel
+    labeled_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+    ds = labeled_ds.shuffle(buffer_size=1000)
+    # Split dataset into train and test
+    ds_size = 50000 # TODO
+    train_size = int(0.8*ds_size)
+    test_size = ds_size - train_size
+    train_ds = ds.take(train_size)
+    test_ds = ds.skip(train_size).take(test_size)
+    train_batches = int((train_size-1)/batch_size+1)
+    test_batches = int((test_size-1)/batch_size+1)
+    # Prepare datasets for iteration
+    train_ds = prepare_for_training(train_ds, cache='./states_train.tfcache')
+    test_ds = prepare_for_training(test_ds, cache='./states_test.tfcache')
 
     # Set up model checkpointing so we can resume training or test separately
-    checkpoint_dir = os.path.join(logger.output_dir, 'training_checkpoints')
+    checkpoint_dir = os.path.join(logger_kwargs['output_dir'],
+        'training_checkpoints')
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     model_dict = {f'state_autoencoder': autoencoder}
     checkpoint = tf.train.Checkpoint(**model_dict)
 
-    # @tf.function
-    def train_step(batch):
+    @tf.function
+    def train_step(input_batch, label_batch):
         with tf.GradientTape(persistent=True) as tape:
-            o_est = autoencoder(batch['obs1'], training=True)
-            loss = tf.keras.losses.mean_squared_error(batch['obs1'], o_est)
+            pred_batch = autoencoder(input_batch, training=True)
+            loss = tf.keras.losses.mean_squared_error(label_batch, pred_batch)
         gradients = tape.gradient(loss, autoencoder.trainable_variables)
         autoencoder.optimizer.apply_gradients(
             zip(gradients, autoencoder.trainable_variables))
