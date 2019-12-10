@@ -2,11 +2,22 @@
 
 ## Research question
 
+### v1
+
 How does the performance compare to baseline for a deep RL algorithm with
 
-1. q network inputting pretrained decoded state
-2. q network inputting next state (via pretrained transition model) in addition to state and action
-3. both 1 and 2
+1. q network inputting pretrained decoded state?
+2. q network inputting next state (via pretrained transition model) in addition to state and action?
+3. both 1 and 2?
+
+### v2
+
+How does a low-dimensional state representation learned 
+
+1. by an autoencoder of high-dimensional representation
+2. by said autoencoder, trained further as part of actor-critic models in RL
+
+relate to the hand-crafted state representation? How correlated are they?
 
 ## Components
 
@@ -180,5 +191,55 @@ Writing batch loop for state autoencoder
 
 Investigating training memory problem
 
+- Note: set batch size to 4 (comparable to batch size 64 for 32x32 images)
 - Simplest thing is to disable caching and see what happens
-- 
+    - Goes ok
+    - So I think what happens with caching is, it appends the batches to a buffer (the cache). We have told it to do so for the entire dataset, and it may be holding it in memory. (though I thought not since it is creating cache files). But huh...even so, the entire dataset is only about .5GB on disk, so I don't understand what is ultimately causing crash. Maybe because training itself is demanding so much, that extra amount pushes it over.
+    - We could try using a single iterator and see if the cache still blows up
+- Other problems: 
+    - Runs past expected 10000 iterations per epoch
+        - I think since we set the dataset to repeat forever, the iteration doesn't terminate
+        - Again, single batch iterator could be the go.
+    - Oh, we shouldn't having `training=False` in test because that give the encoded vector. We still want to use the decoded output for validation.
+- I'll try out a single iterator style of code block
+    - Nevermind, not worth it
+- I think we'll be fine without caching - not worth the hassle even if we can find a way. The other optimisations like prefetch will do.
+
+Changing research question
+
+- For now I'm interested in exploring the similarity (or lack thereof) of a learned low-dimensional representation to the hand-crafted one.
+- This requires an additional stage in the model to get the number of latent dimensions exactly right. The first option that comes to mind is a fully connected layer. We would have one either side of the latent vector.
+    - But fully connected is so yesterday, right? What about average pooling?
+    - Nah look, I'll stick with FC because the dimensionality is relatively low at that point, it won't slow it down much. I'm not looking for a state-of-the-art model - it's more important that it works, period. And for that, I trust FC more.
+
+### 2019.12.10
+
+Adding observation dimension constraint to autoencoder
+
+- Make the specific latent dimensionality an optional parameter - if specified, add fully connected layers to convert the dimensions. This is better abstraction because we can plug in different architectures within an `if` statement or method.
+- Last conv layer is (H/2^L, W/2^L, 1) where L is the number of conv layers. We flatten this to (HW/2^2L,) and pass the vector to FC with `latent_dim` units. That is then passed to another FC with HW/2^2L units, before being reshaped to (H/2^L, W/2^L, 1) and proceeding with conv, like nothing ever happend.
+- The encoder output is the flattened latent vector; the decoder starts with the second FC.
+- What about the forward pass condition? I think it's fine, because `Flatten` is idempotent. Let's just check that...yes.
+- Have now checked the dimensionality of everything in a separate script. Should be ok.
+- Updating methods proper
+- Testing updates using `plot_model` for autoencoder and encoder alone
+    - Original
+        - Autoencoder: OK
+        - Encoder: OK
+    - Reduced
+        - Autoencoder: OK
+        - Encoder: OK (with redundant Flatten, as expected)
+- Training looks OK
+- **Side note**: check what the dataset shuffle buffer size means. It would be bad if it only shuffled in batches of 1000 images, since these are going to be more similar (contiguous frames).
+
+Testing output trained on 80 images
+
+- Mode collapse! It has memorised something resembling the initial state.
+- Can we address mode collapse just with more data? Seems like no guarantee.
+    - Still collapse with one run on 9000 training samples
+- I think the first quick but important thing is checking how shuffling works.
+- Then what else can we do? In order of information value
+    - Test a larger latent dimension: the task may be too difficult with 11 dimensions!
+    - Test multiple random seeds (this matters less than in RL but still matters)
+    - Learn the difference between frames, or the difference between the initial and current frame. The rationale is that the variance between any two frames is relatively small, because the background is identical and the hopper rarely moves a great deal.
+        - I'm mindful that Deep TAMER worked with Atari bowling, which would have similarly low variance. Did they check whether mode collapse was happening? Hopefully. But a key difference was a larger latent dimension than I'm now using.
