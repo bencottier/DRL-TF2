@@ -227,17 +227,60 @@ def test_pipeline():
     plt.show()
 
 
+def test_state_encoding(output_dir, env_name, checkpoint_number):
+    # Get observation dimensions
+    with gym.make(env_name) as env:
+        obs_dim = env.observation_space.shape[0]
+    
+    autoencoder = ConvolutionalAutoencoder(input_shape=(128, 128, 3),
+        latent_dim=obs_dim, hidden_sizes=(64,64,64,1), kernel_size=4)
+
+    checkpoint_dir = os.path.join(output_dir, 'training_checkpoints')
+    checkpoint = tf.train.Checkpoint(state_autoencoder=autoencoder)
+    if checkpoint_number is not None:
+        checkpoint.restore(os.path.join(checkpoint_dir, f'ckpt-{checkpoint_number}')).expect_partial()
+    else:
+        checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
+
+    import random
+    import matplotlib.pyplot as plt
+
+    for _ in range(5):
+        rand_batch = random.choice(range(10))
+        data_dir = os.path.join(DATA_PATH, env_name, f'data_batch_{rand_batch}')
+        rand_img_name = random.choice(os.listdir(data_dir))
+        rand_img = PIL.Image.open(os.path.join(data_dir, rand_img_name))
+
+        x = scale_float(np.array(rand_img))
+        decoded = autoencoder(x[np.newaxis, ...], training=True).numpy()
+
+        plt.subplot(121)
+        plt.imshow(rand_img)
+        plt.subplot(122)
+        plt.imshow(scale_uint8(decoded[0]))
+        plt.show()
+
+
 if __name__ == '__main__':
     # test_pipeline()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('env', type=str,
             help='environment name (from OpenAI Gym)')
+
     parser.add_argument('--dataset', type=bool, default=False,
             help='generate a dataset of states for the environment'
                 'instead of training')
     parser.add_argument('--resume', type=int, default=0,
             help='data sample index to resume generation from')
+
+    parser.add_argument('--test', type=bool, default=False,
+            help='test a trained model')
+    parser.add_argument('--test_dir', type=str,
+            help='directory containing training_checkpoints folder')
+    parser.add_argument('--checkpoint', type=int, default=None,
+            help='checkpoint to load models from (default latest)')
+
     parser.add_argument('--hid', type=int, default=64,
             help='number of hidden units per hidden layer')
     parser.add_argument('--l', type=int, default=3,
@@ -253,6 +296,8 @@ if __name__ == '__main__':
     if args.dataset:
         generate_state_dataset(args.env, DATA_PATH, 
             resume_from=args.resume)
+    elif args.test:
+        test_state_encoding(args.test_dir, args.env, args.checkpoint)
     else:
         logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
         hidden_sizes = args.l*[args.hid]+[1]
