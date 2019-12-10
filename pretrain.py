@@ -23,7 +23,8 @@ import os
 import argparse
 
 
-DATASET_SIZE = 100000
+DATA_PATH = './data/state'
+DATASET_SIZE = 10000  # 100000
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
@@ -138,7 +139,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     labeled_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
     ds = labeled_ds.shuffle(buffer_size=1000)
     # Split dataset into train and test
-    train_size = int(0.8*DATASET_SIZE)
+    train_size = int(0.9*DATASET_SIZE)
     test_size = DATASET_SIZE - train_size
     train_ds = ds.take(train_size)
     test_ds = ds.skip(train_size).take(test_size)
@@ -189,7 +190,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
                 loss = test_step(input_batch, label_batch)
                 loss = np.sqrt(loss.numpy()).mean()
                 pbar_test.update(1)
-                pbar_test.set_description(f'Epoch {epoch}: test-loss={loss:.4f}')
+                pbar_test.set_description(f'Epoch {epoch}: valid-loss={loss:.4f}')
         # Save the model
         if (epoch+1) % save_freq == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
@@ -250,9 +251,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.dataset:
-        generate_state_dataset(args.env, './data/state', resume_from=args.resume)
+        generate_state_dataset(args.env, DATA_PATH, 
+            resume_from=args.resume)
     else:
         logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
+        hidden_sizes = args.l*[args.hid]+[1]
         train_state_encoding(args.env, seed=args.seed, epochs=args.epochs,
-            model_kwargs=dict(hidden_sizes=args.l*[args.hid]+[1]),
+            model_kwargs=dict(hidden_sizes=hidden_sizes, kernel_size=4),
             logger_kwargs=logger_kwargs)
