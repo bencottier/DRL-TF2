@@ -83,8 +83,9 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     tf.random.set_seed(seed)
     np.random.seed(seed)
 
-    # Initialise model used for encoding
-    autoencoder = ConvolutionalAutoencoder(lr=lr, **model_kwargs)
+    # Get observation dimensions
+    with gym.make(env_name) as env:
+        obs_dim = env.observation_space.shape[0]
 
     # Initialise dataset
     # tf.data helpers adapted from https://www.tensorflow.org/tutorials/load_data/images
@@ -146,6 +147,12 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     # Prepare datasets for iteration
     train_ds = prepare_for_training(train_ds)
     test_ds = prepare_for_training(test_ds)
+
+    # Initialise model used for encoding
+    input_batch, _ = next(iter(train_ds.take(1)))
+    input_shape = input_batch.shape[1:]
+    autoencoder = ConvolutionalAutoencoder(input_shape=input_shape,
+        latent_dim=obs_dim, lr=lr, **model_kwargs)
 
     # Set up model checkpointing so we can resume training or test separately
     checkpoint_dir = os.path.join(logger_kwargs['output_dir'],
