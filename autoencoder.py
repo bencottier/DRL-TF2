@@ -13,12 +13,15 @@ import numpy as np
 
 class ConvolutionalAutoencoder(tf.keras.Model):
 
-    def __init__(self, hidden_sizes=(64, 64, 64, 1), kernel_size=3, 
-        output_channels=3, lr=None):
+    def __init__(self, hidden_sizes=(64, 1), input_shape=(64, 64, 3), 
+        latent_dim=None, kernel_size=3, lr=None):
         super(ConvolutionalAutoencoder, self).__init__()
         self.hidden_sizes = list(hidden_sizes)
         self.kernel_size = kernel_size
-        self.output_channels = output_channels
+        self.height = input_shape[0]
+        self.width = input_shape[1]
+        self.output_channels = input_shape[2]
+        self.latent_dim = latent_dim
         if lr is not None:
             self.optimizer = tf.keras.optimizers.Adam(lr)
         self.make_layers()
@@ -53,11 +56,25 @@ class ConvolutionalAutoencoder(tf.keras.Model):
         # Encoder layers
         self.down_stack = [self.downsample(f, self.kernel_size, apply_batchnorm=(i!=0)) 
                 for i, f in enumerate(self.hidden_sizes)]
+        self.up_stack = list()
+        # Optional dense dimensionality conversion
+        if self.latent_dim is not None:
+            restore_shape = (int(self.height/(2**len(self.hidden_sizes))), 
+                int(self.width/(2**len(self.hidden_sizes))), 1)
+            restore_units = restore_shape[0] * restore_shape[1]
+            # Reduce to latent dimension
+            self.down_stack.append(tf.keras.layers.Flatten())
+            self.down_stack.append(tf.keras.layers.Dense(
+                self.latent_dim, activation='relu'))
+            # Restore to previous dimension
+            self.up_stack.append(tf.keras.layers.Dense(
+                restore_units, activation='relu'))
+            self.up_stack.append(tf.keras.layers.Reshape(restore_shape))
         # Decoder layers
         drop = max(len(self.hidden_sizes), 3)
-        self.up_stack = [self.upsample(f, self.kernel_size, apply_dropout=(i<drop))
+        self.up_stack += [self.upsample(f, self.kernel_size, apply_dropout=(i<drop))
                 for i, f in enumerate(self.hidden_sizes[-2::-1])]
-        # Back to input shape
+        # Restore input
         initializer = tf.random_normal_initializer(0., 0.02)
         self.last = tf.keras.layers.Conv2DTranspose(self.output_channels, self.kernel_size,
                 strides=2, padding='same', kernel_initializer=initializer, activation='tanh')
@@ -76,9 +93,12 @@ class ConvolutionalAutoencoder(tf.keras.Model):
 
 
 if __name__ == '__main__':
-    autoencoder = ConvolutionalAutoencoder([64, 64, 64, 1], 3)
+    input_shape = (160, 160, 3)
+    autoencoder = ConvolutionalAutoencoder(hidden_sizes=(64, 64, 64, 1),
+        input_shape=input_shape, latent_dim=None, kernel_size=4)
     # outputs = autoencoder(np.random.randn(2, 32, 32, 3).astype(np.float32))
-    inputs = tf.keras.layers.Input(shape=(160, 160, 3))
-    outputs = autoencoder.call_fn(inputs, training=False)
+    inputs = tf.keras.layers.Input(shape=input_shape)
+    outputs = autoencoder.call_fn(inputs, training=True)
     autoencoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
-    tf.keras.utils.plot_model(autoencoder_fn, to_file='encoder_example.png', show_shapes=True, dpi=64)
+    tf.keras.utils.plot_model(autoencoder_fn, 
+        to_file='autoencoder_example.png', show_shapes=True, dpi=64)
