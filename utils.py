@@ -119,7 +119,7 @@ def scale(a, low, high):
 
 
 def scale_float(a, dtype=np.float32):
-    return scale(a, -1., 1.).astype(dtype)
+    return scale(a, 0., 1.).astype(dtype)
 
 
 def scale_uint8(a, dtype=np.uint8):
