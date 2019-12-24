@@ -136,8 +136,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
         return ds
 
     # Have multiple images loaded/processed in parallel
-    labeled_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
-    ds = labeled_ds.shuffle(buffer_size=1000)
+    ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
     # Split dataset into train and test
     train_size = int(0.9*DATASET_SIZE)
     test_size = DATASET_SIZE - train_size
@@ -146,14 +145,14 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     train_batches = int((train_size-1)/batch_size+1)
     test_batches = int((test_size-1)/batch_size+1)
     # Prepare datasets for iteration
-    train_ds = prepare_for_training(train_ds)
-    test_ds = prepare_for_training(test_ds)
+    train_ds = prepare_for_training(train_ds, shuffle_buffer_size=train_size)
+    test_ds = prepare_for_training(test_ds, shuffle_buffer_size=test_size)
 
     # Initialise model used for encoding
     input_batch, _ = next(iter(train_ds.take(1)))
     input_shape = input_batch.shape[1:]
     autoencoder = ConvolutionalAutoencoder(input_shape=input_shape,
-        latent_dim=obs_dim, lr=lr, **model_kwargs)
+        latent_dim=None, lr=lr, **model_kwargs)
 
     # Set up model checkpointing so we can resume training or test separately
     checkpoint_dir = os.path.join(logger_kwargs['output_dir'],
