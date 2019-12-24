@@ -239,7 +239,7 @@ def test_state_encoding(output_dir, env_name, checkpoint_number):
         obs_dim = env.observation_space.shape[0]
     
     autoencoder = ConvolutionalAutoencoder(input_shape=(128, 128, 3),
-        latent_dim=obs_dim, hidden_sizes=(64,64,64,1), kernel_size=4)
+        latent_dim=None, hidden_sizes=(64,64,64,1), kernel_size=4)
 
     checkpoint_dir = os.path.join(output_dir, 'training_checkpoints')
     checkpoint = tf.train.Checkpoint(state_autoencoder=autoencoder)
