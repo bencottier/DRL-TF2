@@ -177,19 +177,26 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
         loss = tf.keras.losses.mean_squared_error(label_batch, pred_batch)
         return loss
 
+    def train(num_batch, ds, test=False):
+        loss_name = 'train-loss' if not test else 'test-loss'
+        step_fn = train_step if not test else test_step
+        losses = np.zeros(num_batch, dtype=np.float32)
+        with tqdm.tqdm(total=num_batch) as pbar:
+            for i, (input_batch, label_batch) in enumerate(ds):
+                loss = step_fn(input_batch, label_batch)
+                losses[i] = np.sqrt(loss.numpy()).mean()
+                pbar.update(1)
+                pbar.set_description(
+                    f'Epoch {epoch}: {loss_name}={losses[i]:.4f}')
+            pbar.set_description(
+                f'Epoch {epoch}: {loss_name}={losses.mean():.4f}')
+
+    def test(num_batch, ds):
+        train(num_batch, ds, test=True)
+
     for epoch in range(epochs):
-        with tqdm.tqdm(total=train_batches) as pbar_train:
-            for input_batch, label_batch in train_ds:
-                loss = train_step(input_batch, label_batch)
-                loss = np.sqrt(loss.numpy()).mean()
-                pbar_train.update(1)
-                pbar_train.set_description(f'Epoch {epoch}: train-loss={loss:.4f}')
-        with tqdm.tqdm(total=test_batches) as pbar_test:
-            for input_batch, label_batch in test_ds:
-                loss = test_step(input_batch, label_batch)
-                loss = np.sqrt(loss.numpy()).mean()
-                pbar_test.update(1)
-                pbar_test.set_description(f'Epoch {epoch}: valid-loss={loss:.4f}')
+        train(train_batches, train_ds)
+        test(test_batches, test_ds)
         # Save the model
         if (epoch+1) % save_freq == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
