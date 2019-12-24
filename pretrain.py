@@ -274,16 +274,15 @@ if __name__ == '__main__':
     parser.add_argument('env', type=str,
             help='environment name (from OpenAI Gym)')
 
-    parser.add_argument('--dataset', type=bool, default=False,
+    parser.add_argument('--dataset', action="store_true",
             help='generate a dataset of states for the environment'
                 'instead of training')
     parser.add_argument('--resume', type=int, default=0,
             help='data sample index to resume generation from')
 
-    parser.add_argument('--test', type=bool, default=False,
-            help='test a trained model')
-    parser.add_argument('--test_dir', type=str,
-            help='directory containing training_checkpoints folder')
+    parser.add_argument('--test_dir', type=str, default=None,
+            help='directory containing training_checkpoints folder '
+                '(triggers test mode)')
     parser.add_argument('--checkpoint', type=int, default=None,
             help='checkpoint to load models from (default latest)')
 
@@ -302,7 +301,7 @@ if __name__ == '__main__':
     if args.dataset:
         generate_state_dataset(args.env, DATA_PATH, 
             resume_from=args.resume)
-    elif args.test:
+    elif args.test_dir is not None:
         test_state_encoding(args.test_dir, args.env, args.checkpoint)
     else:
         logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
