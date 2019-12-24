@@ -243,3 +243,24 @@ Testing output trained on 80 images
     - Test multiple random seeds (this matters less than in RL but still matters)
     - Learn the difference between frames, or the difference between the initial and current frame. The rationale is that the variance between any two frames is relatively small, because the background is identical and the hopper rarely moves a great deal.
         - I'm mindful that Deep TAMER worked with Atari bowling, which would have similarly low variance. Did they check whether mode collapse was happening? Hopefully. But a key difference was a larger latent dimension than I'm now using.
+
+### 2019.12.11
+
+Understanding dataset shuffle
+
+- https://www.tensorflow.org/guide/data
+    > The Dataset.shuffle() transformation maintains a fixed-size buffer and chooses the next element uniformly at random from that buffer.
+    - So for full shuffle, we would need to set buffer size to dataset size or greater.
+    - Buffer size of 1000 is the same as maximum episode length, so it is always shuffling within episodes at the least. But states in a given episode are correlated due to the dynamics: if the hopper falls over at one point, that makes it more likely it will be fallen over later on.
+    - I will try a full shuffle and see how it goes, but I'm not confident this addresses the main problem (I think the size of the latent dimension and the variance between frames are more important).
+- Testing full shuffle, 5 epochs
+    - Still mode collapse
+- Testing without `obs_dim` latent dimension (10x10 bottleneck, fully convolutional)
+    - Still mode collapse
+- Hot take: for the purpose of the Hopper task, mode collapse doesn't matter?
+    - If all the states look similar, and the point of pretraining is just to get _closer_ to the right representation and speed up training proper, is it so bad?
+    - Well, the proof is in the pudding...we would need to test the RL training performance, ultimately, to find this out
+    - But the other reason I want to avoid mode collapse is to get a representation that is comparable to the true low-dimensional state (comparable as in the same _sort_ of thing, not necessarily similar value). It would then also be interesting to manually vary the input to the decoder, or input actual low-dim states and compare the decoded frame to the actual frame
+- Where to now
+    - Keep increasing the latent dimension (up to say, 3 attempts) until mode collapse does not occur.
+    - Modify the model to learn frame differences. I feel quite optimistic about this - there is so much redundant information in the frame, when only the movement of the object matters. Surely you can't get away with the equivalent solution to before - outputting zeros when loss pushes you to learn changes in form. If it does that then there is something else wrong with what I've built.
