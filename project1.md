@@ -264,3 +264,10 @@ Understanding dataset shuffle
 - Where to now
     - Keep increasing the latent dimension (up to say, 3 attempts) until mode collapse does not occur.
     - Modify the model to learn frame differences. I feel quite optimistic about this - there is so much redundant information in the frame, when only the movement of the object matters. Surely you can't get away with the equivalent solution to before - outputting zeros when loss pushes you to learn changes in form. If it does that then there is something else wrong with what I've built.
+
+## 2019.12.24
+
+Updating repo for gcloud port
+
+- `conda env export --no-builds | grep -v "^prefix: " > environment.yml`
+- 
