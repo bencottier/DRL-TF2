@@ -31,27 +31,31 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 def generate_state_dataset(env_name, save_path, resume_from=0, 
     im_size=(128, 128), num_samples=int(1e5), max_ep_len=1000):
 
+    output = json.dumps(convert_json(locals()), separators=(',',':\t'), indent=4, 
+        sort_keys=True)
+    save_path = os.path.join(save_path, env_name)
+    obs_save_name = 'obs.npz'
+    env = gym.make(env_name)
+
     if resume_from <= 0:
-        output = json.dumps(convert_json(locals()), separators=(',',':\t'), indent=4, 
-            sort_keys=True)
-        save_path = os.path.join(save_path, env_name)
+        obs_dim = env.observation_space.shape[0]
+        obs = np.zeros(shape=(num_samples, obs_dim), dtype=np.float32)
         os.makedirs(save_path, exist_ok=True)
         with open(os.path.join(save_path, "config.json"), 'w') as out:
             out.write(output)
     else:
-        save_path = os.path.join(save_path, env_name)
         print(f'Resuming from sample {resume_from}')
+        obs = np.load(os.path.join(save_path, obs_save_name))['obs']
 
     print(f'State dataset of {num_samples:.0e} samples for {env_name} '
         f'saved to {save_path}')
     
-    batch = 0
-    env = gym.make(env_name)
+    batch = -1
     sample = max(0, resume_from)
     save_path_base = save_path
     with tqdm.tqdm(total=num_samples, initial=sample) as pbar:  # create a progress bar
         while sample < num_samples:
-            _, d, ep_len = env.reset(), False, 0
+            o, d, ep_len = env.reset(), False, 0
             while not (d or (ep_len == max_ep_len)):
                 # Batch data so folders don't get too large
                 this_batch = int(sample / 10000)
@@ -60,13 +64,17 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
                     save_path = os.path.join(save_path_base, f'data_batch_{batch}')
                     os.makedirs(save_path, exist_ok=True)
 
+                # Store observation in array
+                obs[sample] = o
+                # Save observations
+                np.savez_compressed(os.path.join(save_path_base, obs_save_name), obs=obs)
                 # Save the frame as a downsampled RGB JPEG
                 PIL.Image.fromarray(env.render(mode='rgb_array')).\
                     resize(im_size, resample=PIL.Image.BILINEAR).\
                     save(os.path.join(save_path, f'frame{sample}.jpg'), "JPEG")
 
                 a = env.action_space.sample()
-                _, _, d, _ = env.step(a)
+                o, _, d, _ = env.step(a)
                 ep_len += 1
                 sample += 1
                 pbar.update(1)
@@ -239,7 +247,7 @@ def test_state_encoding(output_dir, env_name, checkpoint_number):
         obs_dim = env.observation_space.shape[0]
     
     autoencoder = ConvolutionalAutoencoder(input_shape=(128, 128, 3),
-        latent_dim=None, hidden_sizes=(64,64,64,1), kernel_size=4)
+        latent_dim=None, hidden_sizes=(1,), kernel_size=4)
 
     checkpoint_dir = os.path.join(output_dir, 'training_checkpoints')
     checkpoint = tf.train.Checkpoint(state_autoencoder=autoencoder)

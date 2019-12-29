@@ -255,7 +255,7 @@ Understanding dataset shuffle
     - I will try a full shuffle and see how it goes, but I'm not confident this addresses the main problem (I think the size of the latent dimension and the variance between frames are more important).
 - Testing full shuffle, 5 epochs
     - Still mode collapse
-- Testing without `obs_dim` latent dimension (10x10 bottleneck, fully convolutional)
+- Testing without `obs_dim` latent dimension (8x8 bottleneck, fully convolutional)
     - Still mode collapse
 - Hot take: for the purpose of the Hopper task, mode collapse doesn't matter?
     - If all the states look similar, and the point of pretraining is just to get _closer_ to the right representation and speed up training proper, is it so bad?
@@ -270,4 +270,52 @@ Understanding dataset shuffle
 Updating repo for gcloud port
 
 - `conda env export --no-builds | grep -v "^prefix: " > environment.yml`
+- Oh shoot, I forgot about MuJoCo. Can't use it on gcloud because I only have one license.
+    - Oh wait. For now I just need MuJoCo images... I can transfer the dataset.
+- Besides, the machine keeps shutting down without warning. I'll try it some other time.
+
+Testing limit of mode collapse
+
+- So currently we have filters [64, 64, 64, 1]
+- Input shape is [128, 128, 3]
+- So layer shapes go [128, 128, 3]->[64, 64, 64]->[32, 32, 64]->[16, 16, 64]->[8, 8, 1]
+- Let's strip it right back: one layer
+    - This gives [128, 128, 3]->[64, 64, 1]
+    - So 4096 latent units. That's one twelfth of the original image.
+- What if I'm wrong about the labels? What if the labels are the first image frame for some reason, and not tracking the input image? That would also explain why it learns something like the initial frame.
+    - No, I can't see any evidence of that
+- One layer, 5 epochs, 10k dataset
+    - It tracks the state significantly! But why is it black and white?
+- Two layer, 5 epochs, 10k dataset
+    - Artefact-heavy
+    - Generally does not track the state. Occasionally does. Of 15 test frams, I noticed one that tracked a significantly bent hopper.
+
+## 2019.12.28
+
+Generating `LunarLanderContinuous-v2` dataset
+
+- Storing `.npz` of low-dim observations corresponding to frames
+    - Modified dataset generation function significantly to do this. It seems to be OK.
+
+## 2019.12.29
+
+Inspecting `LunarLanderContinuous-v2` dataset
+
+- Looks OK
+- The visual rocket booster effects may confound things, but we'll see how it goes
+- Compression artefacts are noticeable on the lander and vary somewhat randomly from frame to frame.
+
+Update to plan
+
+- I want to come back to the state autoencoder, but I'm going to take a slight tangent on something I think is probably easier: generating an image frame from the corresponding low-dim observation, or vice-versa. Respectively this is like training a CNN to be a rendering engine, or classify the underlying state based on a visual observation.
+    - I anticipate a fair chance of blurring as a suboptimal solution to the former problem, which may warrant a GAN setup to improve. But GAN comes with its own challenges...
+
+Setting up state->observation model training
+
+- Input: "underlying" or "low-dimensional" observation - I will just refer to it here as "state"
+- Output: rendered frame that correspond to state
+- Loss: pixel-wise MSE
+- With the current setup I don't expect many changes. It's nice that we have those TF data functions to easily switch out what the label is.
+- What about the model? We should either write a new class or use the reference to the decoder portion of the autoencoder.
+- Should we or shouldn't we have a Dense layer to begin? It may not be necessary. But it's the easiest way to make it compatible with the current interface.
 - 
