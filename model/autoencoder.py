@@ -75,11 +75,11 @@ class ConvDecoder(tf.keras.Model):
         return self.last(x)
 
 
-class ConvolutionalAutoencoder(tf.keras.Model):
+class ConvAutoencoder(tf.keras.Model):
 
     def __init__(self, hidden_sizes=(64, 1), input_shape=(64, 64, 3), 
         latent_dim=None, kernel_size=3, lr=None):
-        super(ConvolutionalAutoencoder, self).__init__()
+        super(ConvAutoencoder, self).__init__()
         self.hidden_sizes = list(hidden_sizes)
         self.kernel_size = kernel_size
         self.height = input_shape[0]
@@ -129,14 +129,15 @@ class ConvolutionalAutoencoder(tf.keras.Model):
 
 if __name__ == '__main__':
     # input_shape = (160, 160, 3)
-    # autoencoder = ConvolutionalAutoencoder(hidden_sizes=(64, 64, 64, 1),
+    # autoencoder = ConvAutoencoder(hidden_sizes=(64, 64, 64, 1),
     #     input_shape=input_shape, latent_dim=None, kernel_size=4)
     # # outputs = autoencoder(np.random.randn(2, 32, 32, 3).astype(np.float32))
     # inputs = tf.keras.layers.Input(shape=input_shape)
     # outputs = autoencoder.call(inputs, training=True)
     # autoencoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
     # tf.keras.utils.plot_model(autoencoder_fn, 
-    #     to_file='autoencoder_example.png', show_shapes=True, dpi=64)
+    #     to_file='../out/visual/autoencoder_example.png', 
+    #     show_shapes=True, dpi=64)
 
     input_shape = (11,)
     decoder = ConvDecoder(hidden_sizes=(8, 16, 32, 64, 3), 
@@ -144,5 +145,6 @@ if __name__ == '__main__':
     inputs = tf.keras.layers.Input(shape=input_shape)
     outputs = decoder.call(inputs, training=True)
     decoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
-    tf.keras.utils.plot_model(decoder_fn, to_file='decoder_example.png',
+    tf.keras.utils.plot_model(decoder_fn, 
+        to_file='../out/visual/decoder_example.png',
         show_shapes=True, dpi=64)

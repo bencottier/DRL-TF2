@@ -14,7 +14,7 @@ import numpy as np
 
 
 FORCE_DATESTAMP = False
-DEFAULT_DATA_DIR = './out'
+DEFAULT_DATA_DIR = './out/experiment'
 
 
 def setup_logger_kwargs(exp_name, seed=None, data_dir=None, datestamp=False):

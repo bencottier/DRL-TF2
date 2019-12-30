@@ -7,10 +7,10 @@ Model pretraining to enhance learning.
 author: Ben Cottier (git: bencottier)
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
-from replay_buffer import ReplayBuffer
-from logger import EpochLogger
-from autoencoder import ConvolutionalAutoencoder
-from utils import convert_json, scale_float, scale_uint8, setup_logger_kwargs
+from algo.replay_buffer import ReplayBuffer
+from model.autoencoder import ConvAutoencoder
+from util.logger import EpochLogger
+from util.utils import convert_json, scale_float, scale_uint8, setup_logger_kwargs
 import tensorflow as tf
 import numpy as np
 import gym
@@ -159,7 +159,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
     # Initialise model used for encoding
     input_batch, _ = next(iter(train_ds.take(1)))
     input_shape = input_batch.shape[1:]
-    autoencoder = ConvolutionalAutoencoder(input_shape=input_shape,
+    autoencoder = ConvAutoencoder(input_shape=input_shape,
         latent_dim=None, lr=lr, **model_kwargs)
 
     # Set up model checkpointing so we can resume training or test separately
@@ -211,7 +211,7 @@ def train_state_encoding(env_name, model_kwargs=dict(), seed=0,
 
 
 def test_pipeline():
-    autoencoder = ConvolutionalAutoencoder([64, 64, 64, 1], 3)
+    autoencoder = ConvAutoencoder([64, 64, 64, 1], 3)
 
     env_name = 'Hopper-v2'
     # env_name = 'Bowling-v0'
@@ -246,7 +246,7 @@ def test_state_encoding(output_dir, env_name, checkpoint_number):
     with gym.make(env_name) as env:
         obs_dim = env.observation_space.shape[0]
     
-    autoencoder = ConvolutionalAutoencoder(input_shape=(128, 128, 3),
+    autoencoder = ConvAutoencoder(input_shape=(128, 128, 3),
         latent_dim=None, hidden_sizes=(1,), kernel_size=4)
 
     checkpoint_dir = os.path.join(output_dir, 'training_checkpoints')

@@ -317,5 +317,14 @@ Setting up state->observation model training
 - Loss: pixel-wise MSE
 - With the current setup I don't expect many changes. It's nice that we have those TF data functions to easily switch out what the label is.
 - What about the model? We should either write a new class or use the reference to the decoder portion of the autoencoder.
+    - Let's subclass it
 - Should we or shouldn't we have a Dense layer to begin? It may not be necessary. But it's the easiest way to make it compatible with the current interface.
+- Testing training
+    - Loss drops to about 5% in first epoch then kinda hits a wall. No further improvement in second epoch.
+
+## 2019.12.30
+
+Writing divorced Decoder class
+
+- I think this will make things easier in the long run
 - 

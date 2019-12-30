@@ -14,7 +14,7 @@ import shutil
 import numpy as np
 import tensorflow as tf
 import os.path as osp, time, atexit, os
-from utils import convert_json
+from util.utils import convert_json
 
 
 color2num = dict(
