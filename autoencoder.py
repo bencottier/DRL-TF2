@@ -11,6 +11,28 @@ import tensorflow as tf
 import numpy as np
 
 
+def downsample(filters, size, apply_batchnorm=True):
+    initializer = tf.random_normal_initializer(0., 0.02)
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Conv2D(filters, size, 
+            strides=2, padding='same', kernel_initializer=initializer, use_bias=False))
+    if apply_batchnorm:
+        result.add(tf.keras.layers.BatchNormalization())
+    result.add(tf.keras.layers.LeakyReLU())
+    return result
+
+def upsample(filters, size, apply_dropout=False):
+    initializer = tf.random_normal_initializer(0., 0.02)
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Conv2DTranspose(filters, size, 
+            strides=2, padding='same', kernel_initializer=initializer, use_bias=False))
+    result.add(tf.keras.layers.BatchNormalization())
+    if apply_dropout:
+        result.add(tf.keras.layers.Dropout(0.5))
+    result.add(tf.keras.layers.ReLU())
+    return result
+
+
 class ConvolutionalAutoencoder(tf.keras.Model):
 
     def __init__(self, hidden_sizes=(64, 1), input_shape=(64, 64, 3), 
@@ -26,35 +48,12 @@ class ConvolutionalAutoencoder(tf.keras.Model):
             self.optimizer = tf.keras.optimizers.Adam(lr)
         self.make_layers()
 
-    @staticmethod
-    def downsample(filters, size, apply_batchnorm=True):
-        initializer = tf.random_normal_initializer(0., 0.02)
-        result = tf.keras.Sequential()
-        result.add(tf.keras.layers.Conv2D(filters, size, 
-                strides=2, padding='same', kernel_initializer=initializer, use_bias=False))
-        if apply_batchnorm:
-            result.add(tf.keras.layers.BatchNormalization())
-        result.add(tf.keras.layers.LeakyReLU())
-        return result
-
-    @staticmethod
-    def upsample(filters, size, apply_dropout=False):
-        initializer = tf.random_normal_initializer(0., 0.02)
-        result = tf.keras.Sequential()
-        result.add(tf.keras.layers.Conv2DTranspose(filters, size, 
-                strides=2, padding='same', kernel_initializer=initializer, use_bias=False))
-        result.add(tf.keras.layers.BatchNormalization())
-        if apply_dropout:
-            result.add(tf.keras.layers.Dropout(0.5))
-        result.add(tf.keras.layers.ReLU())
-        return result
-
     def make_layers(self):
         """
         https://www.tensorflow.org/tutorials/generative/pix2pix
         """
         # Encoder layers
-        self.down_stack = [self.downsample(f, self.kernel_size, apply_batchnorm=(i!=0)) 
+        self.down_stack = [downsample(f, self.kernel_size, apply_batchnorm=(i!=0)) 
                 for i, f in enumerate(self.hidden_sizes)]
         self.up_stack = list()
         # Optional dense dimensionality conversion
@@ -72,18 +71,12 @@ class ConvolutionalAutoencoder(tf.keras.Model):
             self.up_stack.append(tf.keras.layers.Reshape(restore_shape))
         # Decoder layers
         drop = max(len(self.hidden_sizes), 3)
-        self.up_stack += [self.upsample(f, self.kernel_size, apply_dropout=(i<drop))
+        self.up_stack += [upsample(f, self.kernel_size, apply_dropout=(i<drop))
                 for i, f in enumerate(self.hidden_sizes[-2::-1])]
         # Restore input
         initializer = tf.random_normal_initializer(0., 0.02)
         self.last = tf.keras.layers.Conv2DTranspose(self.output_channels, self.kernel_size,
                 strides=2, padding='same', kernel_initializer=initializer, activation='tanh')
-
-    def call_fn(self, x, training=False):
-        for down in self.down_stack: x = down(x)
-        if not training: return (tf.keras.layers.Flatten())(x)
-        for up in self.up_stack: x = up(x)
-        return self.last(x)
     
     def call(self, x, training=False):
         for down in self.down_stack: x = down(x)
@@ -98,7 +91,7 @@ if __name__ == '__main__':
         input_shape=input_shape, latent_dim=None, kernel_size=4)
     # outputs = autoencoder(np.random.randn(2, 32, 32, 3).astype(np.float32))
     inputs = tf.keras.layers.Input(shape=input_shape)
-    outputs = autoencoder.call_fn(inputs, training=True)
+    outputs = autoencoder.call(inputs, training=True)
     autoencoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
     tf.keras.utils.plot_model(autoencoder_fn, 
         to_file='autoencoder_example.png', show_shapes=True, dpi=64)
