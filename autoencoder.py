@@ -9,6 +9,7 @@ author: Ben Cottier (git: bencottier)
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 import numpy as np
+import math
 
 
 def downsample(filters, size, apply_batchnorm=True):
@@ -21,6 +22,7 @@ def downsample(filters, size, apply_batchnorm=True):
     result.add(tf.keras.layers.LeakyReLU())
     return result
 
+
 def upsample(filters, size, apply_dropout=False):
     initializer = tf.random_normal_initializer(0., 0.02)
     result = tf.keras.Sequential()
@@ -31,6 +33,46 @@ def upsample(filters, size, apply_dropout=False):
         result.add(tf.keras.layers.Dropout(0.5))
     result.add(tf.keras.layers.ReLU())
     return result
+
+
+class ConvDecoder(tf.keras.Model):
+
+    def __init__(self, hidden_sizes=(64, 64, 3), input_shape=(64, 1),
+        kernel_size=3, lr=None):
+        super(ConvDecoder, self).__init__()
+        self.hidden_sizes = list(hidden_sizes)
+        self.kernel_size = kernel_size
+        self._input_shape = input_shape
+        if lr is not None:
+            self.optimizer = tf.keras.optimizers.Adam(lr)
+        self.make_layers()
+
+    def make_layers(self):
+        self.up_stack = list()
+        # Reshape and pad if input is 1D
+        dim = self._input_shape[0]
+        if len(self._input_shape) == 1:
+            self._input_shape = (dim, 1)
+            self.up_stack.append(tf.keras.layers.Reshape(self._input_shape))
+        if len(self._input_shape) == 2:
+            nearest_sq = math.ceil(math.sqrt(dim))
+            sq_shape = (nearest_sq, nearest_sq, self._input_shape[1])
+            self.up_stack.append(
+                tf.keras.layers.ZeroPadding1D((0, nearest_sq**2 - dim)))
+            self.up_stack.append(tf.keras.layers.Reshape(sq_shape))
+        # Build upsampling convolution stack
+        drop = min(len(self.hidden_sizes), 3)
+        self.up_stack += [upsample(f, self.kernel_size, apply_dropout=(i<drop))
+            for i, f in enumerate(self.hidden_sizes[:-1])]
+        # Final layer with output channels
+        initializer = tf.random_normal_initializer(0., 0.02)
+        self.last = tf.keras.layers.Conv2DTranspose(self.hidden_sizes[-1], 
+            self.kernel_size, strides=2, padding='same', 
+            kernel_initializer=initializer, activation='tanh')
+        
+    def call(self, x, training=False):
+        for up in self.up_stack: x = up(x)
+        return self.last(x)
 
 
 class ConvolutionalAutoencoder(tf.keras.Model):
@@ -70,7 +112,7 @@ class ConvolutionalAutoencoder(tf.keras.Model):
                 restore_units, activation='relu'))
             self.up_stack.append(tf.keras.layers.Reshape(restore_shape))
         # Decoder layers
-        drop = max(len(self.hidden_sizes), 3)
+        drop = min(len(self.hidden_sizes), 3)
         self.up_stack += [upsample(f, self.kernel_size, apply_dropout=(i<drop))
                 for i, f in enumerate(self.hidden_sizes[-2::-1])]
         # Restore input
@@ -86,12 +128,21 @@ class ConvolutionalAutoencoder(tf.keras.Model):
 
 
 if __name__ == '__main__':
-    input_shape = (160, 160, 3)
-    autoencoder = ConvolutionalAutoencoder(hidden_sizes=(64, 64, 64, 1),
-        input_shape=input_shape, latent_dim=None, kernel_size=4)
-    # outputs = autoencoder(np.random.randn(2, 32, 32, 3).astype(np.float32))
+    # input_shape = (160, 160, 3)
+    # autoencoder = ConvolutionalAutoencoder(hidden_sizes=(64, 64, 64, 1),
+    #     input_shape=input_shape, latent_dim=None, kernel_size=4)
+    # # outputs = autoencoder(np.random.randn(2, 32, 32, 3).astype(np.float32))
+    # inputs = tf.keras.layers.Input(shape=input_shape)
+    # outputs = autoencoder.call(inputs, training=True)
+    # autoencoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
+    # tf.keras.utils.plot_model(autoencoder_fn, 
+    #     to_file='autoencoder_example.png', show_shapes=True, dpi=64)
+
+    input_shape = (11,)
+    decoder = ConvDecoder(hidden_sizes=(8, 16, 32, 64, 3), 
+        input_shape=input_shape, kernel_size=4)
     inputs = tf.keras.layers.Input(shape=input_shape)
-    outputs = autoencoder.call(inputs, training=True)
-    autoencoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
-    tf.keras.utils.plot_model(autoencoder_fn, 
-        to_file='autoencoder_example.png', show_shapes=True, dpi=64)
+    outputs = decoder.call(inputs, training=True)
+    decoder_fn = tf.keras.Model(inputs=inputs, outputs=outputs)
+    tf.keras.utils.plot_model(decoder_fn, to_file='decoder_example.png',
+        show_shapes=True, dpi=64)
