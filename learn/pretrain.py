@@ -275,6 +275,180 @@ def test_state_encoding(output_dir, env_name, checkpoint_number):
         plt.show()
 
 
+class SupervisedLearner(object):
+
+    def __init__(self, epochs=100, batch_size=4, train_split=0.9, seed=0, 
+        save_freq=1, logger_kwargs=dict(), data_kwargs=dict(), 
+        model_kwargs=dict()):
+        # Set random seed for relevant modules
+        tf.random.set_seed(seed)
+        np.random.seed(seed)
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.train_split = train_split
+        self.save_freq = save_freq
+        self.input_shape = None
+        self.logger_kwargs = logger_kwargs
+        self.setup_dataset(**data_kwargs)
+        self.setup_model(**model_kwargs)
+
+    def setup_dataset_metadata(self):
+        self.data_path = pathlib.Path('../data')
+        self.data_info = dict()
+
+    def setup_dataset(self, **kwargs):
+        self.setup_dataset_metadata(**kwargs)
+        list_ds = tf.data.Dataset.list_files(str(self.data_path/'*/*'))
+        # Have multiple images loaded/processed in parallel
+        ds = list_ds.map(self.process_path, num_parallel_calls=AUTOTUNE)
+        # Split dataset into train and test
+        train_size = int(self.train_split*DATASET_SIZE)
+        test_size = DATASET_SIZE - train_size
+        train_ds = ds.take(train_size)
+        test_ds = ds.skip(train_size).take(test_size)
+        self.train_batches = int((train_size - 1) / self.batch_size + 1)
+        self.test_batches = int((test_size - 1) / self.batch_size + 1)
+        # Prepare datasets for iteration
+        self.train_ds = self.prepare_for_training(train_ds, 
+            shuffle_buffer_size=train_size)
+        self.test_ds = self.prepare_for_training(test_ds, 
+            shuffle_buffer_size=test_size)
+        # Determine input shape
+        input_batch, _ = next(iter(self.train_ds.take(1)))
+        self.input_shape = input_batch.shape[1:]
+
+    def setup_model(self, **kwargs):
+        self.model = tf.keras.Model()
+        model_dict = {f'model': self.model}
+        self.setup_model_checkpoint(model_dict)
+
+    def setup_model_checkpoint(self, model_dict):
+        # Set up model checkpointing so we can resume training or test separately
+        checkpoint_dir = os.path.join(self.logger_kwargs['output_dir'],
+            'training_checkpoints')
+        self.checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+        self.checkpoint = tf.train.Checkpoint(**model_dict)
+
+    def get_input(self, file_path):
+        raise NotImplementedError()
+
+    def get_label(self, file_path):
+        raise NotImplementedError()
+
+    @tf.function
+    def process_path(self, file_path):
+        return self.get_input(file_path), self.get_label(file_path)
+
+    @tf.function
+    def prepare_for_training(self, ds, cache=False, shuffle_buffer_size=1000):
+        # Cache preprocessing work for dataset
+        if cache:
+            if isinstance(cache, str):
+                ds = ds.cache(cache)
+            else:
+                ds = ds.cache()
+        ds = ds.shuffle(buffer_size=shuffle_buffer_size)
+        ds = ds.batch(self.batch_size)
+        # `prefetch` lets the dataset fetch batches in the background 
+        ds = ds.prefetch(buffer_size=AUTOTUNE)
+        return ds
+
+    def loss(self, label_batch, pred_batch):
+        raise NotImplementedError()
+
+    def postprocess_loss(self, loss):
+        return loss
+
+    @tf.function
+    def train_step(self, input_batch, label_batch):
+        with tf.GradientTape(persistent=True) as tape:
+            pred_batch = self.model(input_batch, training=True)
+            loss = self.loss(label_batch, pred_batch)
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(
+            zip(gradients, self.model.trainable_variables))
+        return loss
+
+    @tf.function
+    def test_step(self, input_batch, label_batch):
+        pred_batch = self.model(input_batch, training=True)
+        loss = self.loss(label_batch, pred_batch)
+        return loss
+
+    def train_epoch(self, epoch, num_batch, ds, test=False):
+        loss_name = 'train-loss' if not test else 'test-loss'
+        step_fn = self.train_step if not test else self.test_step
+        losses = np.zeros(num_batch, dtype=np.float32)
+        with tqdm.tqdm(total=num_batch) as pbar:
+            for i, (input_batch, label_batch) in enumerate(ds):
+                loss = step_fn(input_batch, label_batch)
+                losses[i] = self.postprocess_loss(loss)
+                pbar.update(1)
+                pbar.set_description(
+                    f'Epoch {epoch}: {loss_name}={losses[i]:.4f}')
+            pbar.set_description(
+                f'Epoch {epoch}: {loss_name}={losses.mean():.4f}')
+
+    def test_epoch(self, epoch, num_batch, ds):
+        self.train_epoch(epoch, num_batch, ds, test=True)
+
+    def train(self):
+        for epoch in range(self.epochs):
+            self.train_epoch(epoch, self.train_batches, self.train_ds)
+            self.test_epoch(epoch, self.test_batches, self.test_ds)
+            # Save the model
+            if (epoch+1) % self.save_freq == 0:
+                self.checkpoint.save(file_prefix=self.checkpoint_prefix)
+
+
+class StateAutoencoder(SupervisedLearner):
+
+    def __init__(self, env_name, channels, model_kwargs=dict(), **kwargs):
+        super(StateAutoencoder, self).__init__(**kwargs,
+            data_kwargs=dict(env_name=env_name),
+            model_kwargs=model_kwargs)
+        self.channels = channels
+        # Get observation dimensions
+        with gym.make(env_name) as env:
+            self.obs_dim = env.observation_space.shape[0]
+
+    def setup_dataset_metadata(self, env_name):
+        self.data_path = pathlib.Path('../data/state')
+        self.data_path /= env_name
+        with open(str(self.data_path/'config.json')) as f:
+            self.data_info = json.load(f)
+
+    def setup_model(self, **kwargs):
+        self.model = ConvAutoencoder(input_shape=self.input_shape, 
+            latent_dim=self.obs_dim, **kwargs)
+        model_dict = {f'state_autoencoder': self.model}
+        self.setup_model_checkpoint(model_dict)
+
+    def decode_img(self, img):
+        # convert the compressed string to a 3D uint8 tensor
+        img = tf.image.decode_jpeg(img, channels=self.channels)
+        # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+        img = tf.image.convert_image_dtype(img, tf.float32)
+        # resize the image to the desired size.
+        return tf.image.resize(img, self.data_info['im_size'])
+
+    def get_input(self, file_path):
+        img = tf.io.read_file(file_path)
+        img = self.decode_img(img)
+        return img
+
+    def get_label(self, file_path):
+        img = tf.io.read_file(file_path)
+        img = self.decode_img(img)
+        return img
+
+    def loss(self, label_batch, pred_batch):
+        return tf.keras.losses.mean_squared_error(label_batch, pred_batch)
+
+    def postprocess_loss(self, loss):
+        return np.sqrt(loss.numpy()).mean()
+
+
 if __name__ == '__main__':
     # test_pipeline()
 
