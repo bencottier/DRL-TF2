@@ -8,7 +8,7 @@ author: Ben Cottier (git: bencottier)
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 from algo.replay_buffer import ReplayBuffer
-from model.autoencoder import ConvAutoencoder
+from model.autoencoder import ConvAutoencoder, ConvDecoder
 from util.logger import EpochLogger
 from util.utils import convert_json, scale_float, scale_uint8, setup_logger_kwargs
 import tensorflow as tf
@@ -437,16 +437,44 @@ class StateAutoencoder(SupervisedLearner):
         img = self.decode_img(img)
         return img
 
-    def get_label(self, file_path):
-        img = tf.io.read_file(file_path)
-        img = self.decode_img(img)
-        return img
-
     def loss(self, label_batch, pred_batch):
         return tf.keras.losses.mean_squared_error(label_batch, pred_batch)
 
     def postprocess_loss(self, loss):
         return np.sqrt(loss.numpy()).mean()
+
+
+class StateDecoder(SupervisedLearner):
+
+    def __init__(self, env_name, channels, model_kwargs=dict(), **kwargs):
+        super(StateAutoencoder, self).__init__(**kwargs,
+            data_kwargs=dict(env_name=env_name),
+            model_kwargs=model_kwargs)
+        self.channels = channels
+        # Get observation dimensions
+        with gym.make(env_name) as env:
+            self.obs_dim = env.observation_space.shape[0]
+
+    def setup_dataset_metadata(self, env_name):
+        self.data_path = pathlib.Path('../data/state')
+        self.data_path /= env_name
+        with open(str(self.data_path/'config.json')) as f:
+            self.data_info = json.load(f)
+        self.obs = np.load(str(self.data_path/'obs.npz'))['obs']
+
+    def setup_model(self, **kwargs):
+        self.model = ConvDecoder(input_shape=self.input_shape, **kwargs)
+        model_dict = {f'state_decoder': self.model}
+        self.setup_model_checkpoint(model_dict)
+
+    def get_input(self, file_path):
+        parts = tf.strings.split(file_path, os.path.sep)
+        name = tf.strings.split(parts, '.')[0]
+        idx = tf.strings.substr(name, 5, 10)
+        idx = tf.strings.to_number(idx, tf.int32)
+        idx = int(idx.numpy())
+        o = self.obs[idx]
+        return o
 
 
 if __name__ == '__main__':
