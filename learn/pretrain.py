@@ -289,10 +289,12 @@ class SupervisedLearner(object):
         self.save_freq = save_freq
         self.input_shape = None
         self.logger_kwargs = logger_kwargs
+        self.model_name = 'model'
+        self.model_arch = tf.keras.Model
         self.setup_dataset(**data_kwargs)
         self.setup_model(**model_kwargs)
 
-    def setup_dataset_metadata(self):
+    def setup_dataset_metadata(self, **kwargs):
         self.data_path = pathlib.Path('../data')
         self.data_info = dict()
 
@@ -317,9 +319,12 @@ class SupervisedLearner(object):
         input_batch, _ = next(iter(self.train_ds.take(1)))
         self.input_shape = input_batch.shape[1:]
 
+    def special_model_kwargs(self):
+        return dict()
+
     def setup_model(self, **kwargs):
-        self.model = tf.keras.Model()
-        model_dict = {f'model': self.model}
+        self.model = self.model_arch(**self.special_model_kwargs(), **kwargs)
+        model_dict = {f'{self.model_name}': self.model}
         self.setup_model_checkpoint(model_dict)
 
     def setup_model_checkpoint(self, model_dict):
@@ -407,6 +412,8 @@ class StateAutoencoder(SupervisedLearner):
         super(StateAutoencoder, self).__init__(**kwargs,
             data_kwargs=dict(env_name=env_name),
             model_kwargs=model_kwargs)
+        self.model_name = 'state_autoencoder'
+        self.model_arch = ConvAutoencoder
         self.channels = channels
         # Get observation dimensions
         with gym.make(env_name) as env:
@@ -418,11 +425,8 @@ class StateAutoencoder(SupervisedLearner):
         with open(str(self.data_path/'config.json')) as f:
             self.data_info = json.load(f)
 
-    def setup_model(self, **kwargs):
-        self.model = ConvAutoencoder(input_shape=self.input_shape, 
-            latent_dim=self.obs_dim, **kwargs)
-        model_dict = {f'state_autoencoder': self.model}
-        self.setup_model_checkpoint(model_dict)
+    def special_model_kwargs(self):
+        return dict(input_shape=self.input_shape, latent_dim=self.obs_dim)
 
     def decode_img(self, img):
         # convert the compressed string to a 3D uint8 tensor
@@ -444,28 +448,20 @@ class StateAutoencoder(SupervisedLearner):
         return np.sqrt(loss.numpy()).mean()
 
 
-class StateDecoder(SupervisedLearner):
+class StateDecoder(StateAutoencoder):
 
     def __init__(self, env_name, channels, model_kwargs=dict(), **kwargs):
-        super(StateAutoencoder, self).__init__(**kwargs,
-            data_kwargs=dict(env_name=env_name),
-            model_kwargs=model_kwargs)
-        self.channels = channels
-        # Get observation dimensions
-        with gym.make(env_name) as env:
-            self.obs_dim = env.observation_space.shape[0]
+        super(StateDecoder, self).__init__(env_name, channels, 
+            model_kwargs, **kwargs)
+        self.model_arch = ConvDecoder
+        self.model_name = 'state_decoder'
 
     def setup_dataset_metadata(self, env_name):
-        self.data_path = pathlib.Path('../data/state')
-        self.data_path /= env_name
-        with open(str(self.data_path/'config.json')) as f:
-            self.data_info = json.load(f)
+        super(StateDecoder, self).setup_dataset_metadata(env_name)
         self.obs = np.load(str(self.data_path/'obs.npz'))['obs']
 
-    def setup_model(self, **kwargs):
-        self.model = ConvDecoder(input_shape=self.input_shape, **kwargs)
-        model_dict = {f'state_decoder': self.model}
-        self.setup_model_checkpoint(model_dict)
+    def special_model_kwargs(self):
+        return dict(input_shape=self.input_shape)
 
     def get_input(self, file_path):
         parts = tf.strings.split(file_path, os.path.sep)
