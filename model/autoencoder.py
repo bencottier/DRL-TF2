@@ -15,8 +15,8 @@ import math
 def downsample(filters, size, apply_batchnorm=True):
     initializer = tf.random_normal_initializer(0., 0.02)
     result = tf.keras.Sequential()
-    result.add(tf.keras.layers.Conv2D(filters, size, 
-            strides=2, padding='same', kernel_initializer=initializer, use_bias=False))
+    result.add(tf.keras.layers.Conv2D(filters, size, strides=2, 
+        padding='same', kernel_initializer=initializer, use_bias=False))
     if apply_batchnorm:
         result.add(tf.keras.layers.BatchNormalization())
     result.add(tf.keras.layers.LeakyReLU())
@@ -26,8 +26,8 @@ def downsample(filters, size, apply_batchnorm=True):
 def upsample(filters, size, apply_dropout=False):
     initializer = tf.random_normal_initializer(0., 0.02)
     result = tf.keras.Sequential()
-    result.add(tf.keras.layers.Conv2DTranspose(filters, size, 
-            strides=2, padding='same', kernel_initializer=initializer, use_bias=False))
+    result.add(tf.keras.layers.Conv2DTranspose(filters, size, strides=2, 
+        padding='same', kernel_initializer=initializer, use_bias=False))
     result.add(tf.keras.layers.BatchNormalization())
     if apply_dropout:
         result.add(tf.keras.layers.Dropout(0.5))
@@ -49,21 +49,21 @@ class ConvDecoder(tf.keras.Model):
 
     def make_layers(self):
         self.up_stack = list()
-        # Reshape and pad if input is 1D
-        dim = self._input_shape[0]
-        if len(self._input_shape) == 1:
-            self._input_shape = (dim, 1)
-            self.up_stack.append(tf.keras.layers.Reshape(self._input_shape))
-        if len(self._input_shape) == 2:
-            nearest_sq = math.ceil(math.sqrt(dim))
-            sq_shape = (nearest_sq, nearest_sq, self._input_shape[1])
-            self.up_stack.append(
-                tf.keras.layers.ZeroPadding1D((0, nearest_sq**2 - dim)))
-            self.up_stack.append(tf.keras.layers.Reshape(sq_shape))
+
+        dense_unit = self.hidden_sizes[0]
+        dense_sqrt = int(math.sqrt(dense_unit))
+        assert dense_sqrt**2 == dense_unit, \
+            'dense units must be a square number'
+        self.up_stack.append(tf.keras.Sequential([
+            tf.keras.layers.Dense(dense_unit),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.ReLU(),
+            tf.keras.layers.Reshape((dense_sqrt, dense_sqrt, 1))]))
+
         # Build upsampling convolution stack
         drop = min(len(self.hidden_sizes), 3)
         self.up_stack += [upsample(f, self.kernel_size, apply_dropout=(i<drop))
-            for i, f in enumerate(self.hidden_sizes[:-1])]
+            for i, f in enumerate(self.hidden_sizes[1:-1])]
         # Final layer with output channels
         initializer = tf.random_normal_initializer(0., 0.02)
         self.last = tf.keras.layers.Conv2DTranspose(self.hidden_sizes[-1], 
