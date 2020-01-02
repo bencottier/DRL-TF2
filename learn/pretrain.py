@@ -480,7 +480,7 @@ class StateObsLearner(ObsObsLearner):
 
 if __name__ == '__main__':
     # test_pipeline()
-
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('env', type=str,
             help='environment name (from OpenAI Gym)')
@@ -520,3 +520,12 @@ if __name__ == '__main__':
         train_state_encoding(args.env, seed=args.seed, epochs=args.epochs,
             model_kwargs=dict(hidden_sizes=hidden_sizes, kernel_size=4),
             logger_kwargs=logger_kwargs)
+    """
+    
+    exp_name = 'decode-state-test'
+    seed = 20200101
+    logger_kwargs = setup_logger_kwargs(exp_name, seed)
+    learner = StateObsLearner('LunarLanderContinuous-v2', channels=3,
+        model_kwargs=dict(lr=1e-3, hidden_sizes=[64, 64, 64, 64, 3], 
+        kernel_size=4), logger_kwargs=logger_kwargs, seed=seed, epochs=5)
+    learner.train()
