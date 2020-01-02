@@ -277,6 +277,9 @@ def test_state_encoding(output_dir, env_name, checkpoint_number):
 
 class SupervisedLearner(object):
 
+    model_name = 'model'
+    model_arch = tf.keras.Model
+
     def __init__(self, epochs=100, batch_size=4, train_split=0.9, seed=0, 
         save_freq=1, logger_kwargs=dict(), data_kwargs=dict(), 
         model_kwargs=dict()):
@@ -289,13 +292,11 @@ class SupervisedLearner(object):
         self.save_freq = save_freq
         self.input_shape = None
         self.logger_kwargs = logger_kwargs
-        self.model_name = 'model'
-        self.model_arch = tf.keras.Model
         self.setup_dataset(**data_kwargs)
         self.setup_model(**model_kwargs)
 
     def setup_dataset_metadata(self, **kwargs):
-        self.data_path = pathlib.Path('../data')
+        self.data_path = pathlib.Path('data')
         self.data_info = dict()
 
     def setup_dataset(self, **kwargs):
@@ -406,21 +407,22 @@ class SupervisedLearner(object):
                 self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
 
-class StateAutoencoder(SupervisedLearner):
+class ObsObsLearner(SupervisedLearner):
+
+    model_name = 'state_autoencoder'
+    model_arch = ConvAutoencoder
 
     def __init__(self, env_name, channels, model_kwargs=dict(), **kwargs):
-        super(StateAutoencoder, self).__init__(**kwargs,
-            data_kwargs=dict(env_name=env_name),
-            model_kwargs=model_kwargs)
-        self.model_name = 'state_autoencoder'
-        self.model_arch = ConvAutoencoder
         self.channels = channels
         # Get observation dimensions
         with gym.make(env_name) as env:
             self.obs_dim = env.observation_space.shape[0]
+        super(ObsObsLearner, self).__init__(**kwargs,
+            data_kwargs=dict(env_name=env_name),
+            model_kwargs=model_kwargs)
 
     def setup_dataset_metadata(self, env_name):
-        self.data_path = pathlib.Path('../data/state')
+        self.data_path = pathlib.Path('data/state')
         self.data_path /= env_name
         with open(str(self.data_path/'config.json')) as f:
             self.data_info = json.load(f)
@@ -441,6 +443,11 @@ class StateAutoencoder(SupervisedLearner):
         img = self.decode_img(img)
         return img
 
+    def get_label(self, file_path):
+        img = tf.io.read_file(file_path)
+        img = self.decode_img(img)
+        return img
+
     def loss(self, label_batch, pred_batch):
         return tf.keras.losses.mean_squared_error(label_batch, pred_batch)
 
@@ -448,29 +455,27 @@ class StateAutoencoder(SupervisedLearner):
         return np.sqrt(loss.numpy()).mean()
 
 
-class StateDecoder(StateAutoencoder):
+class StateObsLearner(ObsObsLearner):
 
-    def __init__(self, env_name, channels, model_kwargs=dict(), **kwargs):
-        super(StateDecoder, self).__init__(env_name, channels, 
-            model_kwargs, **kwargs)
-        self.model_arch = ConvDecoder
-        self.model_name = 'state_decoder'
+    model_arch = ConvDecoder
+    model_name = 'state_decoder'
 
     def setup_dataset_metadata(self, env_name):
-        super(StateDecoder, self).setup_dataset_metadata(env_name)
-        self.obs = np.load(str(self.data_path/'obs.npz'))['obs']
+        super(StateObsLearner, self).setup_dataset_metadata(env_name)
+        obs = np.load(str(self.data_path/'obs.npz'))['obs']
+        obs = (obs - obs.mean()) / obs.std()
+        self.states = tf.convert_to_tensor(obs)
 
     def special_model_kwargs(self):
         return dict(input_shape=self.input_shape)
 
     def get_input(self, file_path):
         parts = tf.strings.split(file_path, os.path.sep)
-        name = tf.strings.split(parts, '.')[0]
+        name = tf.strings.split(parts[-1], '.')[0]
         idx = tf.strings.substr(name, 5, 10)
         idx = tf.strings.to_number(idx, tf.int32)
-        idx = int(idx.numpy())
-        o = self.obs[idx]
-        return o
+        s = tf.gather(self.states, idx)
+        return s
 
 
 if __name__ == '__main__':
