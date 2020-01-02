@@ -327,4 +327,30 @@ Setting up state->observation model training
 Writing divorced Decoder class
 
 - I think this will make things easier in the long run
-- 
+- Ok, I've written a generic `SupervisedLearner` class, `ConvAutoencoder` class, and `ConvDecoder` class.
+    - This raised some difficult design choices. For example, should the optimizer "belong" to the model or the learning algorithm? Put it that way and I'd think the learning algorithm, because it's the one performing optimization. On the other hand, in general there is an optimizer specific to each model, and a learning algorithm may have more than one model (e.g. GAN). I don't think there are gains in efficiency to be had here, it's just a matter of object-oriented principles and syntax. Which is better: `self.model.optimizer` or `self.model_optimizer`?
+    - I'm straddling between the ideally abstract (which takes design effort that doesn't seem worth it for this project) and 100% specific (which repeats a lot of code).
+    - The aim here is for `ConvDecoder` to only have to modify the model architecture and the source of data.
+
+## 2020.01.01
+
+Reviewing the OO interface
+
+- It seems odd to set the random seed within the class. It seems more sensible to set it outside. But consider having a separate script that runs the class - maybe we wouldn't need to import numpy or tensorflow otherwise.
+
+Testing decoder procedure
+
+- I need to find the nearest square (even) power of 2 for resizing the input, not just the nearest square. Otherwise it won't scale up to 128x128.
+
+## 2020.01.02
+
+Adjusting dimensions of decoder
+
+- On reflection I think it is a better idea to start with a Dense layer. The rationale of sparsity of convolution layers doesn't apply here because the input size is really small. For a length-8 observation vector and a size-64 Dense layer, we have 8x64=512 weights. By contrast, a size-64 convolution layer with kernel size 4 has 4x4x64=1024 weights. Granted, the Dense layer parameters have worse scale-up, but I don't expect it to be problematic.
+- Should we normalise the observation data? I'm reluctant to use a sigmoidal activation in an initial Dense layer because of vanishing gradients.
+
+Training StateObsLearner on LunarLander dataset
+
+- 5 epochs
+- Appear to flatten out at about 5.8% loss. This seems bad because I expect such loss can be achieved without accurately matching the position of the lunar lander.
+- Next we need to write a test function, so we can visually inspect the outputs of the model.
