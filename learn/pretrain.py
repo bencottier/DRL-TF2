@@ -325,15 +325,15 @@ class SupervisedLearner(object):
 
     def setup_model(self, **kwargs):
         self.model = self.model_arch(**self.special_model_kwargs(), **kwargs)
-        model_dict = {f'{self.model_name}': self.model}
-        self.setup_model_checkpoint(model_dict)
+        self.model_dict = {f'{self.model_name}': self.model}
+        self.setup_model_checkpoint()
 
-    def setup_model_checkpoint(self, model_dict):
+    def setup_model_checkpoint(self):
         # Set up model checkpointing to resume training or eval separately
-        checkpoint_dir = os.path.join(self.logger_kwargs['output_dir'],
+        self.checkpoint_dir = os.path.join(self.logger_kwargs['output_dir'],
             'training_checkpoints')
-        self.checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-        self.checkpoint = tf.train.Checkpoint(**model_dict)
+        self.checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
+        self.checkpoint = tf.train.Checkpoint(**self.model_dict)
 
     def get_input(self, file_path):
         raise NotImplementedError()
