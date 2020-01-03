@@ -14,6 +14,7 @@ from util.utils import convert_json, scale_float, scale_uint8, setup_logger_kwar
 import tensorflow as tf
 import numpy as np
 import gym
+import matplotlib.pyplot as plt
 import tqdm
 import json
 import PIL
@@ -364,9 +365,11 @@ if __name__ == '__main__':
     """
     
     exp_name = 'decode-state-test'
-    seed = 20200101
+    seed = 20200103
     logger_kwargs = setup_logger_kwargs(exp_name, seed)
     learner = StateObsLearner('LunarLanderContinuous-v2', channels=3,
         model_kwargs=dict(lr=1e-3, hidden_sizes=[64, 64, 64, 64, 3], 
-        kernel_size=4), logger_kwargs=logger_kwargs, seed=seed, epochs=5)
-    learner.train()
+        kernel_size=4), logger_kwargs=logger_kwargs, seed=seed)
+    for _ in range(5):
+        learner.train(1)
+        learner.test()
