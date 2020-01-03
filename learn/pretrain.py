@@ -280,13 +280,12 @@ class SupervisedLearner(object):
     model_name = 'model'
     model_arch = tf.keras.Model
 
-    def __init__(self, epochs=100, batch_size=4, train_split=0.9, seed=0, 
+    def __init__(self, batch_size=4, train_split=0.9, seed=0, 
         save_freq=1, logger_kwargs=dict(), data_kwargs=dict(), 
         model_kwargs=dict()):
         # Set random seed for relevant modules
         tf.random.set_seed(seed)
         np.random.seed(seed)
-        self.epochs = epochs
         self.batch_size = batch_size
         self.train_split = train_split
         self.save_freq = save_freq
@@ -398,8 +397,8 @@ class SupervisedLearner(object):
     def eval_epoch(self, epoch, num_batch, ds):
         self.train_epoch(epoch, num_batch, ds, eval=True)
 
-    def train(self):
-        for epoch in range(self.epochs):
+    def train(self, epochs):
+        for epoch in range(epochs):
             self.train_epoch(epoch, self.train_batches, self.train_ds)
             self.eval_epoch(epoch, self.eval_batches, self.eval_ds)
             # Save the model
