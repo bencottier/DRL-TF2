@@ -304,18 +304,18 @@ class SupervisedLearner(object):
         list_ds = tf.data.Dataset.list_files(str(self.data_path/'*/*'))
         # Have multiple images loaded/processed in parallel
         ds = list_ds.map(self.process_path, num_parallel_calls=AUTOTUNE)
-        # Split dataset into train and test
+        # Split dataset into train and eval
         train_size = int(self.train_split*DATASET_SIZE)
-        test_size = DATASET_SIZE - train_size
+        eval_size = DATASET_SIZE - train_size
         train_ds = ds.take(train_size)
-        test_ds = ds.skip(train_size).take(test_size)
+        eval_ds = ds.skip(train_size).take(eval_size)
         self.train_batches = int((train_size - 1) / self.batch_size + 1)
-        self.test_batches = int((test_size - 1) / self.batch_size + 1)
+        self.eval_batches = int((eval_size - 1) / self.batch_size + 1)
         # Prepare datasets for iteration
         self.train_ds = self.prepare_for_training(train_ds, 
             shuffle_buffer_size=train_size)
-        self.test_ds = self.prepare_for_training(test_ds, 
-            shuffle_buffer_size=test_size)
+        self.eval_ds = self.prepare_for_training(eval_ds, 
+            shuffle_buffer_size=eval_size)
         # Determine input shape
         input_batch, _ = next(iter(self.train_ds.take(1)))
         self.input_shape = input_batch.shape[1:]
@@ -329,7 +329,7 @@ class SupervisedLearner(object):
         self.setup_model_checkpoint(model_dict)
 
     def setup_model_checkpoint(self, model_dict):
-        # Set up model checkpointing so we can resume training or test separately
+        # Set up model checkpointing to resume training or eval separately
         checkpoint_dir = os.path.join(self.logger_kwargs['output_dir'],
             'training_checkpoints')
         self.checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
@@ -376,14 +376,14 @@ class SupervisedLearner(object):
         return loss
 
     @tf.function
-    def test_step(self, input_batch, label_batch):
+    def eval_step(self, input_batch, label_batch):
         pred_batch = self.model(input_batch, training=True)
         loss = self.loss(label_batch, pred_batch)
         return loss
 
-    def train_epoch(self, epoch, num_batch, ds, test=False):
-        loss_name = 'train-loss' if not test else 'test-loss'
-        step_fn = self.train_step if not test else self.test_step
+    def train_epoch(self, epoch, num_batch, ds, eval=False):
+        loss_name = 'train-loss' if not eval else 'eval-loss'
+        step_fn = self.train_step if not eval else self.eval_step
         losses = np.zeros(num_batch, dtype=np.float32)
         with tqdm.tqdm(total=num_batch) as pbar:
             for i, (input_batch, label_batch) in enumerate(ds):
@@ -395,13 +395,13 @@ class SupervisedLearner(object):
             pbar.set_description(
                 f'Epoch {epoch}: {loss_name}={losses.mean():.4f}')
 
-    def test_epoch(self, epoch, num_batch, ds):
-        self.train_epoch(epoch, num_batch, ds, test=True)
+    def eval_epoch(self, epoch, num_batch, ds):
+        self.train_epoch(epoch, num_batch, ds, eval=True)
 
     def train(self):
         for epoch in range(self.epochs):
             self.train_epoch(epoch, self.train_batches, self.train_ds)
-            self.test_epoch(epoch, self.test_batches, self.test_ds)
+            self.eval_epoch(epoch, self.eval_batches, self.eval_ds)
             # Save the model
             if (epoch+1) % self.save_freq == 0:
                 self.checkpoint.save(file_prefix=self.checkpoint_prefix)
