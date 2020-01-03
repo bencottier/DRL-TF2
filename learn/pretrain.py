@@ -406,6 +406,24 @@ class SupervisedLearner(object):
             if (epoch+1) % self.save_freq == 0:
                 self.checkpoint.save(file_prefix=self.checkpoint_prefix)
 
+    def load_model(self, checkpoint_number=None):
+        if checkpoint_number is not None:
+            checkpoint_dir = os.path.join(self.checkpoint_prefix, 
+                str(checkpoint_number))
+        else:
+            checkpoint_dir = tf.train.latest_checkpoint(self.checkpoint_dir)
+        self.checkpoint.restore(checkpoint_dir).expect_partial()
+
+    def test(self, num_batch=4, checkpoint_number=None):
+        self.load_model(checkpoint_number=checkpoint_number)
+        for input_batch, label_batch in self.eval_ds.take(num_batch):
+            pred_batch = self.model(input_batch)
+            self.show_model_pred(input_batch.numpy(), 
+                label_batch.numpy(), pred_batch.numpy())
+
+    def show_model_pred(self, input_batch, label_batch, pred_batch):
+        raise NotImplementedError()
+
 
 class ObsObsLearner(SupervisedLearner):
 
@@ -476,6 +494,22 @@ class StateObsLearner(ObsObsLearner):
         idx = tf.strings.to_number(idx, tf.int32)
         s = tf.gather(self.states, idx)
         return s
+
+    def show_model_pred(self, input_batch, label_batch, pred_batch):
+        input_batch = input_batch[:, np.newaxis, :]
+
+        plt.figure(figsize=(12, 8))
+        for b in range(self.batch_size):
+            plt.subplot(3, self.batch_size, b+1)
+            plt.imshow(scale_uint8(input_batch[b]))
+            plt.axis('off')
+            plt.subplot(3, self.batch_size, self.batch_size+b+1)
+            plt.imshow(scale_uint8(pred_batch[b]))
+            plt.axis('off')
+            plt.subplot(3, self.batch_size, 2*self.batch_size+b+1)
+            plt.imshow(scale_uint8(label_batch[b]))
+            plt.axis('off')
+        plt.show()
 
 
 if __name__ == '__main__':
