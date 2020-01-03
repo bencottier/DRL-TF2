@@ -70,7 +70,7 @@ class ConvDecoder(tf.keras.Model):
             self.kernel_size, strides=2, padding='same', 
             kernel_initializer=initializer, activation='tanh')
         
-    def call(self, x, training=False):
+    def call(self, x, training=None):
         for up in self.up_stack: x = up(x)
         return self.last(x)
 
@@ -119,10 +119,13 @@ class ConvAutoencoder(tf.keras.Model):
         initializer = tf.random_normal_initializer(0., 0.02)
         self.last = tf.keras.layers.Conv2DTranspose(self.output_channels, self.kernel_size,
                 strides=2, padding='same', kernel_initializer=initializer, activation='tanh')
-    
-    def call(self, x, training=False):
+
+    def encode(self, x):
         for down in self.down_stack: x = down(x)
-        if not training: return (tf.keras.layers.Flatten())(x)
+        return (tf.keras.layers.Flatten())(x)
+    
+    def call(self, x, training=None):
+        for down in self.down_stack: x = down(x)
         for up in self.up_stack: x = up(x)
         return self.last(x)
 
