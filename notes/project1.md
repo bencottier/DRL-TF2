@@ -354,3 +354,15 @@ Training StateObsLearner on LunarLander dataset
 - 5 epochs
 - Appear to flatten out at about 5.8% loss. This seems bad because I expect such loss can be achieved without accurately matching the position of the lunar lander.
 - Next we need to write a test function, so we can visually inspect the outputs of the model.
+
+## 2020.01.03
+
+Writing test/visualisation method
+
+Visualising predictions of lunar lander 5-epoch 10k sample decoder
+
+- It has essentially learned
+    - An average of all backgrounds. There is a sort of central trapezium of solid white which is invariant in all the randomly generated terrains, with blurred grey blobs either side where the terrain varies.
+    - To place the lander landing/crashing at a consistent location in some cases. This seems to correlate strongly with the lander actually hitting terrain at any location, and dimension 6 (from 0) in the low-dim observation being high value.
+- I am not surprised by this result given the previous result for hopper.
+- I guess it's time to mix in some adversarial loss. I expect this will give the decoder the guide it needs to find the more optimal solution, because the adversarial loss will both be less harsh on exact pixel-wise matching, and more harsh on this kind of "hedging" solution. On the other hand, adversarial loss tends to improve high-frequency detail, and may not be right to model the macro-details like position of objects.
