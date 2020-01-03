@@ -377,7 +377,7 @@ class SupervisedLearner(object):
 
     @tf.function
     def eval_step(self, input_batch, label_batch):
-        pred_batch = self.model(input_batch, training=True)
+        pred_batch = self.model(input_batch)
         loss = self.loss(label_batch, pred_batch)
         return loss
 
