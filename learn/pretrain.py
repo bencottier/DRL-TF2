@@ -116,18 +116,18 @@ class SupervisedLearner(object):
         list_ds = tf.data.Dataset.list_files(str(self.data_path/'*/*'))
         # Have multiple images loaded/processed in parallel
         ds = list_ds.map(self.process_path, num_parallel_calls=AUTOTUNE)
-        # Split dataset into train and eval
+        # Split dataset into train and valid
         train_size = int(self.train_split*DATASET_SIZE)
-        eval_size = DATASET_SIZE - train_size
+        valid_size = DATASET_SIZE - train_size
         train_ds = ds.take(train_size)
-        eval_ds = ds.skip(train_size).take(eval_size)
+        valid_ds = ds.skip(train_size).take(valid_size)
         self.train_batches = int((train_size - 1) / self.batch_size + 1)
-        self.eval_batches = int((eval_size - 1) / self.batch_size + 1)
+        self.valid_batches = int((valid_size - 1) / self.batch_size + 1)
         # Prepare datasets for iteration
         self.train_ds = self.prepare_for_training(train_ds, 
             shuffle_buffer_size=train_size)
-        self.eval_ds = self.prepare_for_training(eval_ds, 
-            shuffle_buffer_size=eval_size)
+        self.valid_ds = self.prepare_for_training(valid_ds, 
+            shuffle_buffer_size=valid_size)
         # Determine input shape
         input_batch, _ = next(iter(self.train_ds.take(1)))
         self.input_shape = input_batch.shape[1:]
@@ -188,14 +188,14 @@ class SupervisedLearner(object):
         return loss
 
     @tf.function
-    def eval_step(self, input_batch, label_batch):
+    def valid_step(self, input_batch, label_batch):
         pred_batch = self.model(input_batch)
         loss = self.loss(label_batch, pred_batch)
         return loss
 
-    def train_epoch(self, epoch, num_batch, ds, eval=False):
-        loss_name = 'train-loss' if not eval else 'eval-loss'
-        step_fn = self.train_step if not eval else self.eval_step
+    def train_epoch(self, num_batch, ds, valid=False):
+        loss_name = 'ValidLoss' if valid else 'TrainLoss'
+        step_fn = self.train_step if not valid else self.valid_step
         losses = np.zeros(num_batch, dtype=np.float32)
         with tqdm.tqdm(total=num_batch) as pbar:
             for i, (input_batch, label_batch) in enumerate(ds):
@@ -205,13 +205,13 @@ class SupervisedLearner(object):
                 pbar.set_description(
                     f'Epoch {self.epoch}: {loss_name}={losses[i]:.4f}')
 
-    def eval_epoch(self, epoch, num_batch, ds):
-        self.train_epoch(epoch, num_batch, ds, eval=True)
+    def valid_epoch(self, num_batch, ds):
+        self.train_epoch(num_batch, ds, valid=True)
 
     def train(self, epochs):
         for epoch in range(epochs):
-            self.train_epoch(epoch, self.train_batches, self.train_ds)
-            self.eval_epoch(epoch, self.eval_batches, self.eval_ds)
+            self.train_epoch(self.train_batches, self.train_ds)
+            self.valid_epoch(self.valid_batches, self.valid_ds)
             # Save the model
             if (self.epoch+1) % self.save_freq == 0:
                 self.checkpoint.save(file_prefix=self.checkpoint_prefix)
@@ -227,7 +227,7 @@ class SupervisedLearner(object):
 
     def test(self, num_batch=4, checkpoint_number=None):
         self.load_model(checkpoint_number=checkpoint_number)
-        for input_batch, label_batch in self.eval_ds.take(num_batch):
+        for input_batch, label_batch in self.valid_ds.take(num_batch):
             pred_batch = self.model(input_batch)
             self.show_model_pred(input_batch.numpy(), 
                 label_batch.numpy(), pred_batch.numpy())
