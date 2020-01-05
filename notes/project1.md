@@ -359,10 +359,30 @@ Training StateObsLearner on LunarLander dataset
 
 Writing test/visualisation method
 
-Visualising predictions of lunar lander 5-epoch 10k sample decoder
+Visualising predictions of lunar lander 5-epoch 10k sample decoder (seed: 20200101)
 
 - It has essentially learned
     - An average of all backgrounds. There is a sort of central trapezium of solid white which is invariant in all the randomly generated terrains, with blurred grey blobs either side where the terrain varies.
     - To place the lander landing/crashing at a consistent location in some cases. This seems to correlate strongly with the lander actually hitting terrain at any location, and dimension 6 (from 0) in the low-dim observation being high value.
 - I am not surprised by this result given the previous result for hopper.
 - I guess it's time to mix in some adversarial loss. I expect this will give the decoder the guide it needs to find the more optimal solution, because the adversarial loss will both be less harsh on exact pixel-wise matching, and more harsh on this kind of "hedging" solution. On the other hand, adversarial loss tends to improve high-frequency detail, and may not be right to model the macro-details like position of objects.
+
+## 2020.01.05
+
+Testing 2 Dense layers
+
+- Similar result
+- Just realised that the low-dim state doesn't provide information about the terrain. Duh it can't model that!
+- This strengthens the case for subtracting the background. Doing that now.
+    - Bonus is smaller file size!
+
+Testing background-subtracted dataset
+
+- Subtracts the first frame of each episode
+- Promising scenes: purple mist usually, roughly, in the right position. Sometimes a purple blob that is close to a blurred lander.
+- Loss steadily improves
+- Removing ReLU and making Dense activation 'tanh'
+    - Same train loss, generally slightly worse eval loss
+- 2 Dense (both ReLU)
+    - About the same
+    - Highly uncertain because one seed, 5 epochs, smaller dataset. Consider retrying on full scale setup.
