@@ -67,8 +67,7 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
 
                 # Store observation in array
                 obs[sample] = o
-                # Save observations
-                np.savez_compressed(os.path.join(save_path_base, obs_save_name), obs=obs)
+
                 # Save the frame as a downsampled RGB JPEG
                 PIL.Image.fromarray(env.render(mode='rgb_array')).\
                     resize(im_size, resample=PIL.Image.BILINEAR).\
@@ -82,6 +81,8 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
 
                 if sample >= num_samples:
                     break
+            # Save observations
+            np.savez_compressed(os.path.join(save_path_base, obs_save_name), obs=obs)
 
 
 class SupervisedLearner(object):
