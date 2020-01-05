@@ -57,6 +57,7 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
     with tqdm.tqdm(total=num_samples, initial=sample) as pbar:  # create a progress bar
         while sample < num_samples:
             o, d, ep_len = env.reset(), False, 0
+            base_frame = env.render(mode='rgb_array')
             while not (d or (ep_len == max_ep_len)):
                 # Batch data so folders don't get too large
                 this_batch = int(sample / 10000)
@@ -69,7 +70,8 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
                 obs[sample] = o
 
                 # Save the frame as a downsampled RGB JPEG
-                PIL.Image.fromarray(env.render(mode='rgb_array')).\
+                frame = env.render(mode='rgb_array')
+                PIL.Image.fromarray(np.maximum(frame - base_frame, 0)).\
                     resize(im_size, resample=PIL.Image.BILINEAR).\
                     save(os.path.join(save_path, f'frame{sample}.jpg'), "JPEG")
 
