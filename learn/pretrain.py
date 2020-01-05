@@ -95,6 +95,8 @@ class SupervisedLearner(object):
     def __init__(self, batch_size=4, train_split=0.9, seed=0, 
         save_freq=1, logger_kwargs=dict(), data_kwargs=dict(), 
         model_kwargs=dict()):
+        self.logger = EpochLogger(**logger_kwargs)
+        self.logger.save_config(locals())
         # Set random seed for relevant modules
         tf.random.set_seed(seed)
         np.random.seed(seed)
@@ -103,7 +105,6 @@ class SupervisedLearner(object):
         self.epoch = 1
         self.save_freq = save_freq
         self.input_shape = None
-        self.logger_kwargs = logger_kwargs
         self.setup_dataset(**data_kwargs)
         self.setup_model(**model_kwargs)
 
@@ -141,8 +142,8 @@ class SupervisedLearner(object):
         self.setup_model_checkpoint()
 
     def setup_model_checkpoint(self):
-        # Set up model checkpointing to resume training or eval separately
-        self.checkpoint_dir = os.path.join(self.logger_kwargs['output_dir'],
+        # Set up model checkpointing to resume training or valid separately
+        self.checkpoint_dir = os.path.join(self.logger.output_dir,
             'training_checkpoints')
         self.checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
         self.checkpoint = tf.train.Checkpoint(**self.model_dict)
@@ -204,6 +205,7 @@ class SupervisedLearner(object):
                 pbar.update(1)
                 pbar.set_description(
                     f'Epoch {self.epoch}: {loss_name}={losses[i]:.4f}')
+                self.logger.store(num_batch, **{loss_name: losses[i]})
 
     def valid_epoch(self, num_batch, ds):
         self.train_epoch(num_batch, ds, valid=True)
@@ -215,6 +217,10 @@ class SupervisedLearner(object):
             # Save the model
             if (self.epoch+1) % self.save_freq == 0:
                 self.checkpoint.save(file_prefix=self.checkpoint_prefix)
+            self.logger.log_tabular('Epoch', self.epoch)
+            self.logger.log_tabular('TrainLoss', with_min_and_max=True)
+            self.logger.log_tabular('ValidLoss', with_min_and_max=True)
+            self.logger.dump_tabular()
             self.epoch += 1
 
     def load_model(self, checkpoint_number=None):
