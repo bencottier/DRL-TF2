@@ -257,7 +257,7 @@ class ObsObsLearner(SupervisedLearner):
             model_kwargs=model_kwargs)
 
     def setup_dataset_metadata(self, env_name):
-        self.data_path = pathlib.Path('data/state')
+        self.data_path = pathlib.Path('data/state_diff')
         self.data_path /= env_name
         with open(str(self.data_path/'config.json')) as f:
             self.data_info = json.load(f)
@@ -372,13 +372,15 @@ if __name__ == '__main__':
             model_kwargs=dict(hidden_sizes=hidden_sizes, kernel_size=4),
             logger_kwargs=logger_kwargs)
     """
+
+    # generate_state_dataset('LunarLanderContinuous-v2', './data/state_diff')
     
-    exp_name = 'decode-state-test'
+    exp_name = 'decode-state-diff-test'
     seed = 20200103
     logger_kwargs = setup_logger_kwargs(exp_name, seed)
     learner = StateObsLearner('LunarLanderContinuous-v2', channels=3,
         model_kwargs=dict(lr=1e-3, hidden_sizes=[64, 64, 64, 64, 3], 
         kernel_size=4), logger_kwargs=logger_kwargs, seed=seed)
-    for _ in range(5):
+    for i in range(5):
         learner.train(1)
         learner.test()
