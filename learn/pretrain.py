@@ -100,6 +100,7 @@ class SupervisedLearner(object):
         np.random.seed(seed)
         self.batch_size = batch_size
         self.train_split = train_split
+        self.epoch = 1
         self.save_freq = save_freq
         self.input_shape = None
         self.logger_kwargs = logger_kwargs
@@ -202,9 +203,7 @@ class SupervisedLearner(object):
                 losses[i] = self.postprocess_loss(loss)
                 pbar.update(1)
                 pbar.set_description(
-                    f'Epoch {epoch}: {loss_name}={losses[i]:.4f}')
-            pbar.set_description(
-                f'Epoch {epoch}: {loss_name}={losses.mean():.4f}')
+                    f'Epoch {self.epoch}: {loss_name}={losses[i]:.4f}')
 
     def eval_epoch(self, epoch, num_batch, ds):
         self.train_epoch(epoch, num_batch, ds, eval=True)
@@ -214,8 +213,9 @@ class SupervisedLearner(object):
             self.train_epoch(epoch, self.train_batches, self.train_ds)
             self.eval_epoch(epoch, self.eval_batches, self.eval_ds)
             # Save the model
-            if (epoch+1) % self.save_freq == 0:
+            if (self.epoch+1) % self.save_freq == 0:
                 self.checkpoint.save(file_prefix=self.checkpoint_prefix)
+            self.epoch += 1
 
     def load_model(self, checkpoint_number=None):
         if checkpoint_number is not None:
