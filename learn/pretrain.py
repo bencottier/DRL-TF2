@@ -24,8 +24,6 @@ import os
 import argparse
 
 
-DATA_PATH = './data/state'
-DATASET_SIZE = 10000  # 100000
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
@@ -94,8 +92,8 @@ class SupervisedLearner(object):
     model_name = 'model'
     model_arch = tf.keras.Model
 
-    def __init__(self, batch_size=4, train_split=0.9, seed=0, 
-        save_freq=1, logger_kwargs=dict(), data_kwargs=dict(), 
+    def __init__(self, batch_size=4, dataset_size=int(1e4), train_split=0.9, 
+        seed=0, save_freq=1, logger_kwargs=dict(), data_kwargs=dict(), 
         model_kwargs=dict()):
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
@@ -103,34 +101,35 @@ class SupervisedLearner(object):
         tf.random.set_seed(seed)
         np.random.seed(seed)
         self.batch_size = batch_size
+        self.dataset_size = dataset_size
         self.train_split = train_split
         self.epoch = 1
         self.save_freq = save_freq
         self.input_shape = None
         self.results_dir = os.path.join(self.logger.output_dir, 'results')
+        self.setup_dataset_metadata(**data_kwargs)
         self.setup_model(**model_kwargs)
 
     def setup_dataset_metadata(self, **kwargs):
         self.data_path = pathlib.Path('data')
         self.data_info = dict()
 
-    def setup_dataset(self, **kwargs):
-        self.setup_dataset_metadata(**kwargs)
+    def setup_dataset(self):
         list_ds = tf.data.Dataset.list_files(str(self.data_path/'*/*'))
         # Have multiple images loaded/processed in parallel
         ds = list_ds.map(self.process_path, num_parallel_calls=AUTOTUNE)
         # Split dataset into train and valid
-        train_size = int(self.train_split*DATASET_SIZE)
-        valid_size = DATASET_SIZE - train_size
+        train_size = int(self.train_split * self.dataset_size)
+        valid_size = self.dataset_size - train_size
         train_ds = ds.take(train_size)
         valid_ds = ds.skip(train_size).take(valid_size)
         self.train_batches = int((train_size - 1) / self.batch_size + 1)
         self.valid_batches = int((valid_size - 1) / self.batch_size + 1)
         # Prepare datasets for iteration
         self.train_ds = self.prepare_for_training(train_ds, 
-            shuffle_buffer_size=train_size)
+            shuffle_buffer_size=min(train_size, 10000))
         self.valid_ds = self.prepare_for_training(valid_ds, 
-            shuffle_buffer_size=valid_size)
+            shuffle_buffer_size=min(valid_size, 10000))
         # Determine input shape
         input_batch, _ = next(iter(self.train_ds.take(1)))
         self.input_shape = input_batch.shape[1:]
@@ -160,7 +159,6 @@ class SupervisedLearner(object):
     def process_path(self, file_path):
         return self.get_input(file_path), self.get_label(file_path)
 
-    @tf.function
     def prepare_for_training(self, ds, cache=False, shuffle_buffer_size=1000):
         # Cache preprocessing work for dataset
         if cache:
@@ -213,6 +211,8 @@ class SupervisedLearner(object):
         self.train_epoch(num_batch, ds, valid=True)
 
     def train(self, epochs):
+        if not hasattr(self, 'train_ds'):
+            self.setup_dataset()
         for epoch in range(epochs):
             self.train_epoch(self.train_batches, self.train_ds)
             self.valid_epoch(self.valid_batches, self.valid_ds)
@@ -234,6 +234,8 @@ class SupervisedLearner(object):
         self.checkpoint.restore(checkpoint_dir).expect_partial()
 
     def test(self, num_batch=4, checkpoint_number=None, show=False, save=True):
+        if not hasattr(self, 'valid_ds'):
+            self.setup_dataset()
         self.load_model(checkpoint_number=checkpoint_number)
         for i, (input_batch, label_batch) in \
             enumerate(self.valid_ds.take(num_batch)):
