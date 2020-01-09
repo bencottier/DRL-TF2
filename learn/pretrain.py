@@ -2,7 +2,7 @@
 """
 pretrain.py
 
-Model pretraining to enhance learning.
+Model pretraining to enhance learning in RL environments.
 
 author: Ben Cottier (git: bencottier)
 """
@@ -345,57 +345,17 @@ class StateObsLearner(ObsObsLearner):
 
 
 if __name__ == '__main__':
-    # test_pipeline()
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('env', type=str,
-            help='environment name (from OpenAI Gym)')
-
-    parser.add_argument('--dataset', action="store_true",
-            help='generate a dataset of states for the environment'
-                'instead of training')
-    parser.add_argument('--resume', type=int, default=0,
-            help='data sample index to resume generation from')
-
-    parser.add_argument('--test_dir', type=str, default=None,
-            help='directory containing training_checkpoints folder '
-                '(triggers test mode)')
-    parser.add_argument('--checkpoint', type=int, default=None,
-            help='checkpoint to load models from (default latest)')
-
-    parser.add_argument('--hid', type=int, default=64,
-            help='number of hidden units per hidden layer')
-    parser.add_argument('--l', type=int, default=3,
-            help='number of hidden layers')
-    parser.add_argument('--seed', '-s', type=int, default=0,
-            help='random seed')
-    parser.add_argument('--epochs', type=int, default=50,
-            help='number of epochs to train')
-    parser.add_argument('--exp_name', type=str, default='unnamed',
-            help='name for this experiment, used for the logging folder')
-    args = parser.parse_args()
-
-    if args.dataset:
-        generate_state_dataset(args.env, DATA_PATH, 
-            resume_from=args.resume)
-    elif args.test_dir is not None:
-        test_state_encoding(args.test_dir, args.env, args.checkpoint)
-    else:
-        logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
-        hidden_sizes = args.l*[args.hid]+[1]
-        train_state_encoding(args.env, seed=args.seed, epochs=args.epochs,
-            model_kwargs=dict(hidden_sizes=hidden_sizes, kernel_size=4),
-            logger_kwargs=logger_kwargs)
-    """
 
     # generate_state_dataset('LunarLanderContinuous-v2', './data/state_diff')
     
-    exp_name = 'decode-state-diff-test'
+    exp_name = 'decode-state-diff'
     seed = 20200103
     logger_kwargs = setup_logger_kwargs(exp_name, seed)
+    model_kwargs=dict(lr=1e-3, hidden_sizes=(64,64,64,64,3), kernel_size=4)
     learner = StateObsLearner('LunarLanderContinuous-v2', channels=3,
-        model_kwargs=dict(lr=1e-3, hidden_sizes=[64, 64, 64, 64, 3], 
-        kernel_size=4), logger_kwargs=logger_kwargs, seed=seed)
-    for i in range(5):
-        learner.train(1)
-        learner.test()
+        dataset_size=int(1e4), model_kwargs=model_kwargs, 
+        logger_kwargs=logger_kwargs, seed=seed)
+    learner.test()
+    # for i in range(100):
+        # learner.train(1)
+        # learner.test()
