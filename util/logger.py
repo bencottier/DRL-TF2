@@ -73,16 +73,26 @@ class Logger:
         """
         self.output_dir = output_dir or "/tmp/experiments/%i"%int(time.time())
         if osp.exists(self.output_dir):
-            print("Warning: Log dir %s already exists! Storing info there anyway."%self.output_dir)
+            print("Warning: Log dir %s already exists!"%self.output_dir)
+            self.output_dir_existed = True
         else:
             os.makedirs(self.output_dir)
-        self.output_file = open(osp.join(self.output_dir, output_fname), 'w')
-        atexit.register(self.output_file.close)
-        print(colorize("Logging data to %s"%self.output_file.name, 'green', bold=True))
+        self.output_path = osp.join(self.output_dir, output_fname)
+        self.output_file = None
+        print(colorize("Logging data to %s"%self.output_path, 'green', bold=True))
         self.first_row=True
         self.log_headers = []
         self.log_current_row = {}
         self.exp_name = exp_name
+
+    def setup_output_file(self):
+        if self.output_dir_existed:
+            print("Warning: Log dir %s already existed"%self.output_dir)
+            overwrite = input("This operation will overwrite any previous files. Allow? (y/N): ")
+            if overwrite != "y":
+                raise OSError("Aborted to avoid overwrite")
+        self.output_file = open(self.output_path, 'w')
+        atexit.register(self.output_file.close)
 
     def log_tabular(self, key, val):
         """
@@ -144,6 +154,8 @@ class Logger:
             print(fmt%(key, valstr))
             vals.append(val)
         print("-"*n_slashes)
+        if self.output_file is None:
+            self.setup_output_file()
         if self.output_file is not None:
             if self.first_row:
                 self.output_file.write("\t".join(self.log_headers)+"\n")
