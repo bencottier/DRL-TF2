@@ -8,3 +8,5 @@ data/
 *.pdf
 *.png
 *.jpg
+
+*checkpoint.ipynb
