@@ -54,7 +54,7 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
     batch = -1
     sample = max(0, resume_from)
     save_path_base = save_path
-    with tqdm.tqdm(total=num_samples, initial=sample) as pbar:  # create a progress bar
+    with tqdm.tqdm(total=num_samples, initial=sample) as pbar:
         while sample < num_samples:
             o, d, ep_len = env.reset(), False, 0
             base_frame = env.render(mode='rgb_array')
@@ -63,7 +63,8 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
                 this_batch = int(sample / 10000)
                 if batch < this_batch:
                     batch = this_batch
-                    save_path = os.path.join(save_path_base, f'data_batch_{batch}')
+                    save_path = os.path.join(save_path_base, 
+                        f'data_batch_{batch}')
                     os.makedirs(save_path, exist_ok=True)
 
                 # Store observation in array
@@ -84,7 +85,8 @@ def generate_state_dataset(env_name, save_path, resume_from=0,
                 if sample >= num_samples:
                     break
             # Save observations
-            np.savez_compressed(os.path.join(save_path_base, obs_save_name), obs=obs)
+            np.savez_compressed(os.path.join(save_path_base, obs_save_name), 
+                obs=obs)
 
 
 class SupervisedLearner(object):
