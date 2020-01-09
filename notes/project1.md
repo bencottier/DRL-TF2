@@ -386,3 +386,79 @@ Testing background-subtracted dataset
 - 2 Dense (both ReLU)
     - About the same
     - Highly uncertain because one seed, 5 epochs, smaller dataset. Consider retrying on full scale setup.
+
+Cloud machine time
+
+- Transfer data with zip files - individual files take ages
+- Ok gcloud rejects the ssh after a few minutes or less, with this error:
+    ```
+    ERROR: (gcloud.compute.ssh) [/usr/bin/ssh] exited with return code [255]
+    ```
+- SO 26193535 top answer is `sudo gcloud compute config-ssh` (without sudo for me)
+    - It replies that no instances are running even when they are
+- Was going to try another answer suggesting to create a new user with
+    ```
+    gcloud compute ssh newuser-name@instance-name
+    ```
+- But this said it couldn't find some property with mlpractical in the path
+    - Which made me realise the 'project' property is still set to mlpractical project (use `gcloud config get-value project`)
+    - Changed this to `instrumentality` with `gcloud config set project instrumentality`
+- Experiment seems to run correctly, but seems to not use GPU
+    - `tf.config.experimental.list_physical_devices('GPU')` prints nothing
+    - `nvidia-smi` shows the P100 GPU is there
+    - Maybe just need to `pip install tensorflow-gpu`
+        - Success
+- Problems with dataset ops on GPU
+    - Interestingly, it works if I comment `@tf.function`. Not sure if this is supposed to be right.
+- cuDNN version on machine and cuDNN compiled from TF source are different (7.4.1 vs. 7.6.0)
+    - Solved this by installing `tensorflow-gpu-2.0.0b0` (I assume b1 was installed originally since this is the current default for plain `tensorflow`)
+- 200 iterations per second ladies and gentlemen.
+
+## 2020.01.06
+
+Executing full-scale decoder experiment
+
+- Still getting this error:
+    ```
+    ERROR: (gcloud.beta.compute.ssh) [/usr/bin/ssh] exited with return code [255].
+    ```
+- Quit
+
+## 2020.01.07
+
+Executing full-scale decoder experiment
+
+- I stopped it at 80 epochs due to personal time constraints and because it was virtually converged.
+
+## 2020.01.09
+
+Analysing full-scale decoder experiment
+
+- Firing up a notebook
+- Why is `progress.txt` empty?
+    - Could have been overwrited when I ran `model.test()` locally
+    - I think we're safe because the original will still be on gcloud. But in general this is a bad state of affairs. We need to check whether the directory exists and confirm overwrite.
+    - Changed Logger to confirm overwrite and only open output file when it is first needed.
+- Plotting training data
+    - Extremely smooth training curve
+    - More rough validation curve
+    - Validation loss indicates underfit for most of training, gradually moving to good fit by the end
+- Plotting visual outputs
+    - Learns position well
+    - Lander is the right colour and roughly the right shape
+    - Lander is too blurry to make out orientation
+
+Visualising results in fresh environment simulation
+
+- Model keeps putting the lander in the same position, about a quarter way below the top of frame
+- Could it be the model is degenerate here?
+    - I suspected I wasn't doing dataset shuffling right, so maybe it memorised the order of the data
+    - But it doesn't change significantly from frame to frame either...
+- Let's try plotting frames over larger spans of time to see if it sticks
+    - It does kinda track the ground truth, but very poorly
+- What if I wasn't matching observations to images properly?
+    - But then unless I directly modified...oh! Normalisation? Yes...
+    - `obs.mean()`: 0.06712762
+    - `obs.std()`: 0.5819684
+    - Phew. That's _much_ better. Tracks the ground truth very well.
+- 
