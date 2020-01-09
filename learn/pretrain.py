@@ -105,7 +105,7 @@ class SupervisedLearner(object):
         self.epoch = 1
         self.save_freq = save_freq
         self.input_shape = None
-        self.setup_dataset(**data_kwargs)
+        self.results_dir = os.path.join(self.logger.output_dir, 'results')
         self.setup_model(**model_kwargs)
 
     def setup_dataset_metadata(self, **kwargs):
@@ -231,14 +231,16 @@ class SupervisedLearner(object):
             checkpoint_dir = tf.train.latest_checkpoint(self.checkpoint_dir)
         self.checkpoint.restore(checkpoint_dir).expect_partial()
 
-    def test(self, num_batch=4, checkpoint_number=None):
+    def test(self, num_batch=4, checkpoint_number=None, show=False, save=True):
         self.load_model(checkpoint_number=checkpoint_number)
-        for input_batch, label_batch in self.valid_ds.take(num_batch):
+        for i, (input_batch, label_batch) in \
+            enumerate(self.valid_ds.take(num_batch)):
             pred_batch = self.model(input_batch)
-            self.show_model_pred(input_batch.numpy(), 
-                label_batch.numpy(), pred_batch.numpy())
+            self.plot_model_pred(input_batch.numpy(), 
+                label_batch.numpy(), pred_batch.numpy(), i, show, save)
 
-    def show_model_pred(self, input_batch, label_batch, pred_batch):
+    def plot_model_pred(self, input_batch, label_batch, pred_batch,
+        index, show=False, save=True):
         raise NotImplementedError()
 
 
@@ -312,7 +314,8 @@ class StateObsLearner(ObsObsLearner):
         s = tf.gather(self.states, idx)
         return s
 
-    def show_model_pred(self, input_batch, label_batch, pred_batch):
+    def plot_model_pred(self, input_batch, label_batch, pred_batch,
+        index, show=False, save=True):
         input_batch = input_batch[:, np.newaxis, :]
 
         plt.figure(figsize=(12, 8))
@@ -326,7 +329,15 @@ class StateObsLearner(ObsObsLearner):
             plt.subplot(3, self.batch_size, 2*self.batch_size+b+1)
             plt.imshow(scale_uint8(label_batch[b]))
             plt.axis('off')
-        plt.show()
+        if save:
+            if not os.path.exists(self.results_dir):
+                os.makedirs(self.results_dir)
+            plt.savefig(os.path.join(self.results_dir, f'batch{index}.png'),
+                dpi=None, facecolor='w', edgecolor='w',
+                orientation='portrait', papertype=None, format='png',
+                transparent=False, bbox_inches='tight', metadata=None)
+        if show:
+            plt.show()
 
 
 if __name__ == '__main__':
