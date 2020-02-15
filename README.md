@@ -2,6 +2,14 @@
 
 This repository is for deep reinforcement learning algorithms (currently only Deep Deterministic Policy Gradient) using the TensorFlow 2.0 API. Implementations are partly adapted from [Spinning Up](https://github.com/openai/spinningup/).
 
+## Performance
+
+To give some indication of speed: training on the `HalfCheetah-v2` environment for 3 million steps (environment interactions) single-threaded typically takes about 7 hours on a Lenovo ThinkPad T440 with Intel© Core™ i7-4600U CPU @ 2.10GHz × 2.
+
+Replication of the Spinning Up DDPG HalfCheetah [benchmark](https://spinningup.openai.com/en/latest/spinningup/bench.html):
+
+![DDPG performance benchmark on HalfCheetah environment](./out/demo/ddpg_benchmark_cheetah_performance.png)
+
 ## Requirements
 
 Essentials are Python >= 3.6, TensorFlow 2.0 and OpenAI Gym. For specifics, see `environment.yml`.
@@ -58,10 +66,3 @@ Once training is finished, you can evaluate and visualise the learned policy usi
     --checkpoint CHECKPOINT
                             checkpoint to load models from (default latest)
 
-## Performance
-
-To give some indication of speed: training on the `HalfCheetah-v2` environment for 3 million steps (environment interactions) single-threaded typically takes about 7 hours on a Lenovo ThinkPad T440 with Intel© Core™ i7-4600U CPU @ 2.10GHz × 2.
-
-Replication of the Spinning Up DDPG HalfCheetah [benchmark](https://spinningup.openai.com/en/latest/spinningup/bench.html):
-
-![DDPG performance benchmark on HalfCheetah environment](./out/demo/ddpg_benchmark_cheetah_performance.png)
